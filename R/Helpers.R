@@ -89,7 +89,7 @@ check_input_directory <- function(.dir) {
 
     arrow::write_parquet(empty_classifications, file_classes)
   } else {
-    classifications <- arrow::read_parquet(file_classes)
+    classifications <- arrow::read_parquet(file_classes, mmap = FALSE)
     classes <- unique(schema$Class)
     required_cols <- c("DocID", "UserID", "Timestamp", classes)
 
@@ -262,7 +262,7 @@ get_progress_stats <- function(.dir) {
     ))
   }
 
-  classified_docs <- arrow::read_parquet(file_classes) %>%
+  classified_docs <- arrow::read_parquet(file_classes, mmap = FALSE) %>%
     dplyr::pull(DocID) %>%
     unique() %>%
     length()
@@ -329,7 +329,7 @@ get_classification_values <- function(.dir) {
     return(list())
   }
 
-  classifications_df <- arrow::read_parquet(classifications_file)
+  classifications_df <- arrow::read_parquet(classifications_file, mmap = FALSE)
   if (nrow(classifications_df) == 0) {
     return(list())
   }

@@ -13,6 +13,7 @@
 #' @return The result of calling `rhs(lhs)`.
 NULL
 
+
 #' Null coalescing operator
 #' @keywords internal
 `%||%` <- function(x, y) {

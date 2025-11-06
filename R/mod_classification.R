@@ -21,23 +21,29 @@ mod_classification_ui <- function(id) {
         shiny::div(
           class = "sidebar",
 
-          # --- Filter Panel (as styled buttons) ---
+          # --- Filter Panel (custom button group) ---
           shiny::div(
             class = "filter-panel",
             shiny::h5("Document Filter"),
             shiny::div(
-              class = "filter-button-group",
-              style = "display: flex !important; flex-direction: row !important; gap: 5px;",
-              shiny::radioButtons(
-                ns("doc_filter"),
-                label = NULL,
-                choices = c(
-                  "All Documents" = "all",
-                  "Classified" = "classified",
-                  "Unclassified" = "unclassified"
-                ),
-                selected = "unclassified",
-                inline = TRUE
+              style = "display: flex; gap: 5px;",
+              shiny::actionButton(
+                ns("filter_all"),
+                "All Documents",
+                class = "filter-btn",
+                style = "flex: 1; background-color: #ffffff; border: 1px solid #ced4da;"
+              ),
+              shiny::actionButton(
+                ns("filter_classified"),
+                "Classified",
+                class = "filter-btn",
+                style = "flex: 1; background-color: #ffffff; border: 1px solid #ced4da;"
+              ),
+              shiny::actionButton(
+                ns("filter_unclassified"),
+                "Unclassified",
+                class = "filter-btn filter-btn-active",
+                style = "flex: 1; background-color: #007bff; color: white; border: 1px solid #007bff;"
               )
             )
           ),
@@ -48,7 +54,7 @@ mod_classification_ui <- function(id) {
             shiny::h5("Document Search"),
             shiny::textInput(
               ns("search_doc_id"),
-              label = "Jump to Document ID:",
+              label = NULL,
               placeholder = "Enter document ID...",
               value = ""
             ),
@@ -182,8 +188,42 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       current_doc = NULL,
       filtered_doc_ids = NULL,
       current_index = 1,
-      pending_search = NULL
+      pending_search = NULL,
+      doc_filter = "unclassified"  # Track current filter
     )
+
+    # ===== FILTER BUTTON HANDLERS =====
+    shiny::observeEvent(input$filter_all, {
+      values$doc_filter <- "all"
+      update_filter_buttons("all")
+    })
+
+    shiny::observeEvent(input$filter_classified, {
+      values$doc_filter <- "classified"
+      update_filter_buttons("classified")
+    })
+
+    shiny::observeEvent(input$filter_unclassified, {
+      values$doc_filter <- "unclassified"
+      update_filter_buttons("unclassified")
+    })
+
+    # Update button styling
+    update_filter_buttons <- function(active) {
+      # Reset all buttons
+      shiny::updateActionButton(session, "filter_all",
+                                label = "All Documents",
+                                icon = NULL)
+      shiny::updateActionButton(session, "filter_classified",
+                                label = "Classified",
+                                icon = NULL)
+      shiny::updateActionButton(session, "filter_unclassified",
+                                label = "Unclassified",
+                                icon = NULL)
+
+      # Highlight active button using JavaScript
+      session$sendCustomMessage("updateFilterButtons", active)
+    }
 
     # Selections stored as nested list: selections$"1"$DocClasses = c("val1", "val2")
     selections <- shiny::reactiveValues()
@@ -205,7 +245,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
 
     # ===== GET FILTERED DOCUMENTS =====
     get_filtered_documents <- shiny::reactive({
-      filter_type <- input$doc_filter
+      filter_type <- values$doc_filter
 
       switch(filter_type,
              "all" = get_docids(dir_r(), "All"),
@@ -276,7 +316,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
         shiny::tags$div(
           style = "text-align: center; color: #999; padding: 50px;",
           shiny::tags$h3("No document loaded"),
-          shiny::tags$p(paste("Filter:", input$doc_filter))
+          shiny::tags$p(paste("Filter:", values$doc_filter))
         )
       } else {
         shiny::HTML(values$current_doc$HTML[1])
@@ -446,7 +486,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
         load_current_document()
       } else {
         shiny::showNotification(
-          paste("Reached end of", input$doc_filter, "documents"),
+          paste("Reached end of", values$doc_filter, "documents"),
           type = "warning",
           duration = 2
         )
@@ -500,7 +540,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
 
     show_filter_switch_modal <- function(doc_id) {
       classified_docs <- get_docids(dir_r(), "Classified")
-      current_filter <- input$doc_filter
+      current_filter <- values$doc_filter
 
       if (doc_id %in% classified_docs && current_filter == "unclassified") {
         target_filter <- "classified"
@@ -532,7 +572,8 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
     }
 
     shiny::observeEvent(input$target_filter, {
-      shiny::updateRadioButtons(session, "doc_filter", selected = input$target_filter)
+      values$doc_filter <- input$target_filter
+      update_filter_buttons(input$target_filter)
       shiny::removeModal()
     })
 

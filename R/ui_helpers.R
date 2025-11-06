@@ -196,7 +196,7 @@ classification_css <- function() {
     shiny::tags$style(shiny::HTML("
       /* Classification groups and dropdowns */
       .classification-group {
-        margin-bottom: 20px;
+        margin-bottom: 15px;
       }
 
       .classification-title {
@@ -261,55 +261,22 @@ classification_css <- function() {
       /* Filter panel */
       .filter-panel {
         background-color: #e9ecef;
-        padding: 15px;
-        margin-bottom: 20px;
+        padding: 10px;
+        margin-bottom: 10px;
         border-radius: 5px;
       }
 
-      /* Filter button group */
-      .filter-button-group > div,
-      .filter-button-group .shiny-input-radiogroup {
-        display: flex !important;
-        flex-direction: row !important;
-        gap: 5px !important;
-        width: 100%;
-      }
-
-      .filter-button-group .radio {
-        margin: 0 !important;
-        flex: 1 !important;
-      }
-
-      .filter-button-group label {
-        display: block !important;
-        width: 100% !important;
-        margin: 0 !important;
-        margin-bottom: 0 !important;
-      }
-
-      .filter-button-group input[type='radio'] {
-        display: none !important;
-      }
-
-      .filter-button-group label span {
-        display: block;
-        padding: 8px 12px;
-        background-color: #ffffff;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        text-align: center;
-        cursor: pointer;
-        transition: all 0.2s;
+      /* Filter buttons */
+      .filter-btn {
         font-weight: 500;
-        white-space: nowrap;
+        transition: all 0.2s;
       }
 
-      .filter-button-group label span:hover {
-        background-color: #e9ecef;
-        border-color: #adb5bd;
+      .filter-btn:hover {
+        opacity: 0.8;
       }
 
-      .filter-button-group input[type='radio']:checked + span {
+      .filter-btn-active {
         background-color: #007bff !important;
         color: white !important;
         border-color: #007bff !important;
@@ -319,7 +286,7 @@ classification_css <- function() {
       .selection-mode-panel {
         background-color: #fff3cd;
         padding: 10px;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
         border-radius: 5px;
         border: 1px solid #ffc107;
       }
@@ -346,7 +313,7 @@ classification_css <- function() {
         border: 1px solid #dee2e6;
         border-radius: 5px;
         padding: 20px;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
       }
 
       /* Document viewer header */
@@ -361,9 +328,29 @@ classification_css <- function() {
         background-color: #f8f9fa;
         padding: 15px;
         border-radius: 5px;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
         border-left: 3px solid #3498db;
       }
+    ")),
+    shiny::tags$script(shiny::HTML("
+      Shiny.addCustomMessageHandler('updateFilterButtons', function(active) {
+        // Remove active class from all filter buttons
+        $('.filter-btn').removeClass('filter-btn-active');
+        $('.filter-btn').css({
+          'background-color': '#ffffff',
+          'color': '#000000',
+          'border': '1px solid #ced4da'
+        });
+
+        // Add active class to the clicked button
+        var buttonId = '#classification-filter_' + active;
+        $(buttonId).addClass('filter-btn-active');
+        $(buttonId).css({
+          'background-color': '#007bff',
+          'color': 'white',
+          'border': '1px solid #007bff'
+        });
+      });
     "))
   )
 }

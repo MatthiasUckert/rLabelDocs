@@ -121,9 +121,9 @@ mod_classification_ui <- function(id) {
         )
       ),
 
-      # ===== RIGHT PANEL (8 columns) =====
+      # ===== RIGHT PANEL (9 columns) =====
       shiny::column(
-        8,
+        9,
         shiny::wellPanel(
           shiny::h4("Document Content"),
           shiny::div(
@@ -262,6 +262,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
     output$schema_tabs_ui <- shiny::renderUI({
       sch <- schema_r()
       current_selections <- shiny::reactiveValuesToList(selections)
+      mode <- input$selection_mode
 
       # Calculate completion for each schema
       completion <- calculate_schema_completion(current_selections, sch)
@@ -278,12 +279,13 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
           completion$total_classes[i]
         )
 
-        # Generate tab content
+        # Generate tab content with mode parameter
         tab_content <- generate_schema_tab_content(
           session$ns,
           schema_id,
           sch[[schema_id]],
-          current_selections[[schema_id]] %||% list()
+          current_selections[[schema_id]] %||% list(),
+          mode  # Pass the mode parameter
         )
 
         shiny::tabPanel(
@@ -293,55 +295,64 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
         )
       })
 
+      # Preserve currently active tab when re-rendering
+      current_tab <- input$schema_tabs
+      if (is.null(current_tab)) {
+        # Default to first schema tab
+        current_tab <- get_schema_tab_id(completion$schema_id[1])
+      }
+
       do.call(shiny::tabsetPanel, c(
-        list(id = session$ns("schema_tabs")),
+        list(
+          id = session$ns("schema_tabs"),
+          selected = current_tab  # Preserve active tab
+        ),
         tab_panels
       ))
     })
 
-    # ===== HANDLE BUTTON CLICKS =====
+    # ===== HANDLE DROPDOWN CHANGES =====
     shiny::observe({
       sch <- schema_r()
       mode <- input$selection_mode
 
       for (schema_id in names(sch)) {
         for (class_name in names(sch[[schema_id]]$classes)) {
-          for (value in sch[[schema_id]]$classes[[class_name]]) {
-            local({
-              local_schema <- schema_id
-              local_class <- class_name
-              local_value <- value
+          local({
+            local_schema <- schema_id
+            local_class <- class_name
 
-              button_id <- paste0("btn_", local_schema, "_", local_class, "_",
-                                  gsub("[^A-Za-z0-9]", "_", local_value))
+            dropdown_id <- paste0("dropdown_", local_schema, "_", local_class)
 
-              shiny::observeEvent(input[[button_id]], {
-                current_values <- selections[[local_schema]][[local_class]]
+            shiny::observeEvent(input[[dropdown_id]], {
+              new_value <- input[[dropdown_id]]
 
-                if (mode == "single") {
-                  # Single select: replace with this value
-                  selections[[local_schema]][[local_class]] <- local_value
+              if (mode == "single") {
+                # Single mode: store as character vector (could be empty string)
+                if (is.null(new_value) || length(new_value) == 0 || identical(new_value, "")) {
+                  selections[[local_schema]][[local_class]] <- character(0)
                 } else {
-                  # Multi select: toggle
-                  if (local_value %in% current_values) {
-                    # Remove
-                    selections[[local_schema]][[local_class]] <-
-                      current_values[current_values != local_value]
-                  } else {
-                    # Add
-                    selections[[local_schema]][[local_class]] <-
-                      c(current_values, local_value)
-                  }
+                  selections[[local_schema]][[local_class]] <- new_value
                 }
+              } else {
+                # Multi mode: store as character vector (could be empty)
+                if (is.null(new_value) || length(new_value) == 0) {
+                  selections[[local_schema]][[local_class]] <- character(0)
+                } else {
+                  selections[[local_schema]][[local_class]] <- new_value
+                }
+              }
 
+              # Optional: Show notification for feedback (safe check for vector)
+              if (!is.null(new_value) && length(new_value) > 0 && !identical(new_value, "")) {
                 shiny::showNotification(
-                  paste("Selected:", local_class, "=", local_value),
+                  paste("Updated:", local_class),
                   type = "default",
                   duration = 1
                 )
-              })
+              }
             })
-          }
+          })
         }
       }
     })

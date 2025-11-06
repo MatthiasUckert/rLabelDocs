@@ -1,49 +1,60 @@
 # UI HELPERS
 # This file contains functions for generating dynamic UI components
 
-#' Generate Classification Button
+#' Generate Classification Dropdown
 #'
-#' Creates a classification button with proper styling and ID.
+#' Creates a classification dropdown (single or multi-select based on mode).
 #'
 #' @param ns Namespace function from module
 #' @param schema_id Schema ID
 #' @param class_name Class name
-#' @param value Value label
-#' @param is_selected Logical, whether button should appear selected
-#' @return Shiny button tag
+#' @param values Available values for this class
+#' @param selected_values Currently selected values
+#' @param mode "single" or "multi"
+#' @return Shiny input element (selectInput or selectizeInput)
 #' @keywords internal
-generate_classification_button <- function(ns, schema_id, class_name, value, is_selected = FALSE) {
-  # Create unique button ID
-  button_id <- paste0("btn_", schema_id, "_", class_name, "_", gsub("[^A-Za-z0-9]", "_", value))
+generate_classification_dropdown <- function(ns, schema_id, class_name, values, selected_values, mode = "multi") {
+  # Create unique dropdown ID
+  dropdown_id <- paste0("dropdown_", schema_id, "_", class_name)
 
-  # Determine button class
-  if (is_selected) {
-    btn_class <- "btn btn-primary classification-btn selected-btn"
+  if (mode == "single") {
+    # Single-select dropdown
+    shiny::selectInput(
+      inputId = ns(dropdown_id),
+      label = NULL,
+      choices = c("-- Select --" = "", values),
+      selected = if (length(selected_values) > 0) selected_values[1] else "",
+      width = "100%"
+    )
   } else {
-    btn_class <- "btn btn-outline-primary classification-btn"
+    # Multi-select dropdown with tags
+    shiny::selectizeInput(
+      inputId = ns(dropdown_id),
+      label = NULL,
+      choices = values,
+      selected = selected_values,
+      multiple = TRUE,
+      width = "100%",
+      options = list(
+        placeholder = "Select one or more...",
+        plugins = list("remove_button")
+      )
+    )
   }
-
-  # Add checkmark if selected
-  label <- if (is_selected) paste(value, "\u2713") else value
-
-  shiny::actionButton(
-    inputId = ns(button_id),
-    label = label,
-    class = btn_class
-  )
 }
 
 #' Generate Schema Tab Content
 #'
-#' Creates the classification interface for a single schema.
+#' Creates the classification interface for a single schema with dropdowns.
 #'
 #' @param ns Namespace function from module
 #' @param schema_id Schema ID
 #' @param schema Schema definition (from read_schema())
 #' @param current_selections Named list of currently selected values
+#' @param mode "single" or "multi"
 #' @return Shiny tag list with classification UI
 #' @keywords internal
-generate_schema_tab_content <- function(ns, schema_id, schema, current_selections) {
+generate_schema_tab_content <- function(ns, schema_id, schema, current_selections, mode = "multi") {
   class_groups <- lapply(names(schema$classes), function(class_name) {
     # Get values for this class
     values <- schema$classes[[class_name]]
@@ -51,20 +62,21 @@ generate_schema_tab_content <- function(ns, schema_id, schema, current_selection
     # Get current selections for this class
     selected_values <- current_selections[[class_name]] %||% character(0)
 
-    # Generate buttons
-    buttons <- lapply(values, function(value) {
-      is_selected <- value %in% selected_values
-      generate_classification_button(ns, schema_id, class_name, value, is_selected)
-    })
+    # Generate dropdown
+    dropdown <- generate_classification_dropdown(
+      ns,
+      schema_id,
+      class_name,
+      values,
+      selected_values,
+      mode
+    )
 
     # Create class group
     shiny::div(
       class = "classification-group",
       shiny::h5(class_name, class = "classification-title"),
-      shiny::div(
-        class = "classification-buttons",
-        buttons
-      )
+      dropdown
     )
   })
 
@@ -128,7 +140,7 @@ get_schema_tab_id <- function(schema_id) {
 classification_css <- function() {
   shiny::tags$head(
     shiny::tags$style(shiny::HTML("
-      /* Classification groups and buttons */
+      /* Classification groups and dropdowns */
       .classification-group {
         margin-bottom: 20px;
       }
@@ -137,22 +149,42 @@ classification_css <- function() {
         color: #2c3e50;
         margin-bottom: 10px;
         font-weight: 600;
-      }
-
-      .classification-buttons {
-        margin-bottom: 15px;
-      }
-
-      .classification-btn {
-        margin: 3px;
         font-size: 14px;
       }
 
-      .selected-btn {
-        background-color: #3498db !important;
-        color: white !important;
-        border-color: #3498db !important;
-        font-weight: 600;
+      /* Selectize styling */
+      .selectize-input {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 6px 8px;
+        font-size: 14px;
+      }
+
+      .selectize-input.focus {
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+      }
+
+      .selectize-dropdown {
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+      }
+
+      /* Tags in multi-select */
+      .selectize-input .item {
+        background-color: #3498db;
+        color: white;
+        border: none;
+        padding: 2px 8px;
+        margin: 2px;
+        border-radius: 3px;
+      }
+
+      .selectize-input .remove {
+        border-left: 1px solid rgba(255,255,255,0.3);
+        padding-left: 5px;
+        margin-left: 5px;
       }
 
       /* Document content viewer */
@@ -226,8 +258,8 @@ classification_css <- function() {
 #' @keywords internal
 format_selection_mode <- function(mode) {
   if (mode == "single") {
-    "Single-select mode: Click to select one value per class"
+    "Single-select mode: Choose one value per class"
   } else {
-    "Multi-select mode: Click to select multiple values per class"
+    "Multi-select mode: Choose multiple values per class"
   }
 }

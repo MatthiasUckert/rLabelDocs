@@ -30,8 +30,7 @@ Shiny app object
 }
 \description{
 Main function to launch the document classification Shiny application.
-Currently includes only the Classification tab. Overview and Browser tabs
-will be added in subsequent development phases.
+Includes three tabs: Classification, Overview, and Browser.
 }
 \examples{
 \dontrun{

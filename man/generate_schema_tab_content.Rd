@@ -4,7 +4,13 @@
 \alias{generate_schema_tab_content}
 \title{Generate Schema Tab Content}
 \usage{
-generate_schema_tab_content(ns, schema_id, schema, current_selections)
+generate_schema_tab_content(
+  ns,
+  schema_id,
+  schema,
+  current_selections,
+  mode = "multi"
+)
 }
 \arguments{
 \item{ns}{Namespace function from module}
@@ -14,11 +20,13 @@ generate_schema_tab_content(ns, schema_id, schema, current_selections)
 \item{schema}{Schema definition (from read_schema())}
 
 \item{current_selections}{Named list of currently selected values}
+
+\item{mode}{"single" or "multi"}
 }
 \value{
 Shiny tag list with classification UI
 }
 \description{
-Creates the classification interface for a single schema.
+Creates the classification interface for a single schema with dropdowns.
 }
 \keyword{internal}

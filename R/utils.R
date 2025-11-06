@@ -43,6 +43,10 @@ parse_schema_class_key <- function(key) {
 #' Suppress NSE warnings
 #' @keywords internal
 utils::globalVariables(c(
+  # Data I/O variables
   "DocID", "HTML", "UserID", "Timestamp", "Schema", "Class", "Value",
-  "SchemaName", ".", "everything", "where"
+  "SchemaName", ".", "everything", "where",
+  # Overview module variables
+  "category", "count", "classifications", "ymax", "ymin", "Date", "documents",
+  "fraction"
 ))

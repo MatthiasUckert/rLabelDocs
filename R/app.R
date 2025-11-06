@@ -4,8 +4,7 @@
 #' Launch Classification App
 #'
 #' Main function to launch the document classification Shiny application.
-#' Currently includes only the Classification tab. Overview and Browser tabs
-#' will be added in subsequent development phases.
+#' Includes three tabs: Classification, Overview, and Browser.
 #'
 #' @param .dir Path to project directory containing:
 #'   - Documents.parquet (required)
@@ -72,10 +71,21 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
       "Classification",
       icon = shiny::icon("check-square"),
       mod_classification_ui("classification")
-    )
+    ),
 
-    # TODO: Add Overview tab in next phase
-    # TODO: Add Browser tab in next phase
+    # Tab 2: Overview
+    shiny::tabPanel(
+      "Overview",
+      icon = shiny::icon("chart-bar"),
+      mod_overview_ui("overview")
+    ),
+
+    # Tab 3: Browser
+    shiny::tabPanel(
+      "Browser",
+      icon = shiny::icon("search"),
+      mod_browser_ui("browser")
+    )
   )
 
   # ===== SERVER =====
@@ -88,8 +98,19 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
       schema = schema
     )
 
-    # TODO: Add Overview module server in next phase
-    # TODO: Add Browser module server in next phase
+    # Call overview module server
+    mod_overview_server(
+      "overview",
+      .dir = .dir,
+      schema = schema
+    )
+
+    # Call browser module server
+    mod_browser_server(
+      "browser",
+      .dir = .dir,
+      schema = schema
+    )
   }
 
   # ===== LAUNCH APP =====

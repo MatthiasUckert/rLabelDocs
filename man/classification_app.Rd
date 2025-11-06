@@ -2,15 +2,52 @@
 % Please edit documentation in R/app.R
 \name{classification_app}
 \alias{classification_app}
-\title{Main Classification App with Tabs}
+\title{Launch Classification App}
 \usage{
-classification_app(.dir, .user_id = "user")
+classification_app(
+  .dir,
+  .user_id = "user",
+  .port = NULL,
+  .launch_browser = TRUE
+)
 }
 \arguments{
-\item{.dir}{Path to classification directory}
+\item{.dir}{Path to project directory containing:
+\itemize{
+\item Documents.parquet (required)
+\item Schema.xlsx or Schema.csv (required)
+\item ClassificationDetails.parquet (created if missing)
+}}
 
-\item{.user_id}{User ID}
+\item{.user_id}{User identifier for audit trail}
+
+\item{.port}{Port number for Shiny server (default: random)}
+
+\item{.launch_browser}{Whether to launch browser automatically (default: TRUE)}
+}
+\value{
+Shiny app object
 }
 \description{
-Main Classification App with Tabs
+Main function to launch the document classification Shiny application.
+Currently includes only the Classification tab. Overview and Browser tabs
+will be added in subsequent development phases.
+}
+\examples{
+\dontrun{
+# Launch app with default settings
+classification_app(
+  .dir = "path/to/project/",
+  .user_id = "analyst1"
+)
+
+# Launch on specific port without browser
+classification_app(
+  .dir = "path/to/project/",
+  .user_id = "analyst1",
+  .port = 8888,
+  .launch_browser = FALSE
+)
+}
+
 }

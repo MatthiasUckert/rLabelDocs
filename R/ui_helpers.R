@@ -267,30 +267,28 @@ classification_css <- function() {
       }
 
       /* Filter button group */
-      .filter-button-group {
-        display: flex;
-        gap: 5px;
-      }
-
-      .filter-button-group > div {
-        display: flex;
-        gap: 5px;
+      .filter-button-group > div,
+      .filter-button-group .shiny-input-radiogroup {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 5px !important;
         width: 100%;
       }
 
       .filter-button-group .radio {
         margin: 0 !important;
-        flex: 1;
+        flex: 1 !important;
       }
 
       .filter-button-group label {
-        display: block;
-        width: 100%;
+        display: block !important;
+        width: 100% !important;
         margin: 0 !important;
+        margin-bottom: 0 !important;
       }
 
       .filter-button-group input[type='radio'] {
-        display: none;
+        display: none !important;
       }
 
       .filter-button-group label span {
@@ -303,6 +301,7 @@ classification_css <- function() {
         cursor: pointer;
         transition: all 0.2s;
         font-weight: 500;
+        white-space: nowrap;
       }
 
       .filter-button-group label span:hover {

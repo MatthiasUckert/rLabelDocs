@@ -27,6 +27,7 @@ mod_classification_ui <- function(id) {
             shiny::h5("Document Filter"),
             shiny::div(
               class = "filter-button-group",
+              style = "display: flex !important; flex-direction: row !important; gap: 5px;",
               shiny::radioButtons(
                 ns("doc_filter"),
                 label = NULL,

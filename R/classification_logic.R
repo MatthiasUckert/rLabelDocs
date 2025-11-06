@@ -151,7 +151,29 @@ is_document_classified <- function(.dir, .doc_id) {
   .doc_id %in% classified_ids
 }
 
-#' Format Document Info Display
+#' Format Document Info Display (Simplified)
+#'
+#' Creates simplified formatted text for document info panel.
+#' Only shows position and overall progress.
+#'
+#' @param .current_index Current position in filtered list
+#' @param .total_filtered Total documents in filtered list
+#' @param .dir Path to project directory
+#' @return Character string with formatted info
+#' @export
+format_document_info_simple <- function(.current_index, .total_filtered, .dir) {
+  # Get progress stats
+  progress <- get_progress_stats(.dir)
+
+  # Build simple info string
+  paste0(
+    "Position: ", .current_index, " of ", .total_filtered, "\n",
+    "Progress: ", progress$classified_documents, "/", progress$total_documents,
+    " (", progress$percentage_complete, "%)"
+  )
+}
+
+#' Format Document Info Display (Full version - kept for backwards compatibility)
 #'
 #' Creates formatted text for document info panel.
 #'

@@ -103,6 +103,60 @@ generate_schema_tab_badge <- function(schema_id, schema_name, completed_classes,
   paste0(schema_name, " (", completed_classes, "/", total_classes, ") ", icon)
 }
 
+#' Generate Classification Display
+#'
+#' Creates a read-only display of classifications (same style as Browser tab).
+#'
+#' @param classification_nested Nested list of classifications
+#' @param schema Schema list
+#' @return Shiny UI for classification display
+#' @export
+generate_classification_display <- function(classification_nested, schema) {
+  # Build classification display
+  class_displays <- lapply(names(classification_nested), function(schema_id) {
+    schema_classes <- classification_nested[[schema_id]]
+    schema_name <- schema[[schema_id]]$name
+
+    # Filter out empty classes
+    non_empty <- names(schema_classes)[sapply(schema_classes, length) > 0]
+
+    if (length(non_empty) == 0) {
+      return(NULL)
+    }
+
+    class_items <- lapply(non_empty, function(class_name) {
+      values <- schema_classes[[class_name]]
+
+      shiny::div(
+        style = "margin-bottom: 10px;",
+        shiny::strong(class_name, ":"),
+        shiny::span(
+          style = "margin-left: 10px;",
+          paste(values, collapse = ", ")
+        )
+      )
+    })
+
+    shiny::div(
+      class = "classification-display",
+      shiny::h6(schema_name, style = "color: #3498db; margin-bottom: 10px;"),
+      class_items
+    )
+  })
+
+  # Remove NULL entries
+  class_displays <- class_displays[!sapply(class_displays, is.null)]
+
+  if (length(class_displays) == 0) {
+    return(shiny::div(
+      style = "color: #999; font-style: italic;",
+      "No classifications for this document"
+    ))
+  }
+
+  shiny::tagList(class_displays)
+}
+
 #' Generate Filter Dropdown Choices
 #'
 #' Creates choices list for document filter dropdown with counts.
@@ -189,7 +243,7 @@ classification_css <- function() {
 
       /* Document content viewer */
       .document-content {
-        height: 800px;
+        height: 600px;
         overflow-y: auto;
         padding: 20px;
         border: 1px solid #ddd;
@@ -210,6 +264,56 @@ classification_css <- function() {
         padding: 15px;
         margin-bottom: 20px;
         border-radius: 5px;
+      }
+
+      /* Filter button group */
+      .filter-button-group {
+        display: flex;
+        gap: 5px;
+      }
+
+      .filter-button-group > div {
+        display: flex;
+        gap: 5px;
+        width: 100%;
+      }
+
+      .filter-button-group .radio {
+        margin: 0 !important;
+        flex: 1;
+      }
+
+      .filter-button-group label {
+        display: block;
+        width: 100%;
+        margin: 0 !important;
+      }
+
+      .filter-button-group input[type='radio'] {
+        display: none;
+      }
+
+      .filter-button-group label span {
+        display: block;
+        padding: 8px 12px;
+        background-color: #ffffff;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-weight: 500;
+      }
+
+      .filter-button-group label span:hover {
+        background-color: #e9ecef;
+        border-color: #adb5bd;
+      }
+
+      .filter-button-group input[type='radio']:checked + span {
+        background-color: #007bff !important;
+        color: white !important;
+        border-color: #007bff !important;
       }
 
       /* Selection mode toggle */
@@ -242,8 +346,24 @@ classification_css <- function() {
         background-color: white;
         border: 1px solid #dee2e6;
         border-radius: 5px;
-        padding: 15px;
+        padding: 20px;
         margin-bottom: 15px;
+      }
+
+      /* Document viewer header */
+      .viewer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      /* Classification display (read-only) */
+      .classification-display {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        border-left: 3px solid #3498db;
       }
     "))
   )

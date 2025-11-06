@@ -2,7 +2,7 @@
 % Please edit documentation in R/classification_logic.R
 \name{format_document_info}
 \alias{format_document_info}
-\title{Format Document Info Display}
+\title{Format Document Info Display (Full version - kept for backwards compatibility)}
 \usage{
 format_document_info(
   .dir,

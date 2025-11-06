@@ -21,19 +21,23 @@ mod_classification_ui <- function(id) {
         shiny::div(
           class = "sidebar",
 
-          # --- Filter Panel ---
+          # --- Filter Panel (as styled buttons) ---
           shiny::div(
             class = "filter-panel",
             shiny::h5("Document Filter"),
-            shiny::selectInput(
-              ns("doc_filter"),
-              label = NULL,
-              choices = c(
-                "All Documents" = "all",
-                "Unclassified" = "unclassified",
-                "Classified" = "classified"
-              ),
-              selected = "unclassified"
+            shiny::div(
+              class = "filter-button-group",
+              shiny::radioButtons(
+                ns("doc_filter"),
+                label = NULL,
+                choices = c(
+                  "All Documents" = "all",
+                  "Classified" = "classified",
+                  "Unclassified" = "unclassified"
+                ),
+                selected = "unclassified",
+                inline = TRUE
+              )
             )
           ),
 
@@ -47,24 +51,25 @@ mod_classification_ui <- function(id) {
               placeholder = "Enter document ID...",
               value = ""
             ),
+            # Search buttons on one line
             shiny::div(
-              style = "margin-top: 10px;",
+              style = "margin-top: 10px; display: flex; gap: 5px;",
               shiny::actionButton(
                 inputId = ns("search_btn"),
                 label = "Go to Document",
                 class = "btn-primary",
-                style = "width: 100%; margin-bottom: 5px;"
+                style = "flex: 1;"
               ),
               shiny::actionButton(
                 inputId = ns("clear_search_btn"),
                 label = "Clear",
                 class = "btn-secondary",
-                style = "width: 100%;"
+                style = "flex: 1;"
               )
             )
           ),
 
-          # --- Document Info ---
+          # --- Document Info (simplified) ---
           shiny::wellPanel(
             shiny::h5("Document Info"),
             shiny::verbatimTextOutput(ns("doc_info"))
@@ -125,11 +130,28 @@ mod_classification_ui <- function(id) {
       shiny::column(
         9,
         shiny::wellPanel(
-          shiny::h4("Document Content"),
+          # Document header with ID
+          shiny::div(
+            class = "viewer-header",
+            shiny::h4("Document Content", style = "display: inline-block; margin: 0;"),
+            shiny::div(
+              style = "float: right;",
+              shiny::textOutput(ns("document_header_id"), inline = TRUE)
+            )
+          ),
+
+          shiny::hr(),
+
+          # Document content
           shiny::div(
             class = "document-content",
             shiny::htmlOutput(ns("document_display"))
-          )
+          ),
+
+          # Classifications display
+          shiny::hr(),
+          shiny::h5("Classifications"),
+          shiny::uiOutput(ns("document_classifications"))
         )
       )
     )
@@ -224,19 +246,21 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       }
     }
 
-    # ===== DOCUMENT INFO DISPLAY =====
-    output$doc_info <- shiny::renderText({
-      # Convert reactive selections to list
-      current_selections <- shiny::reactiveValuesToList(selections)
+    # ===== DOCUMENT HEADER ID =====
+    output$document_header_id <- shiny::renderText({
+      if (is.null(values$current_doc_id)) {
+        "No document selected"
+      } else {
+        paste("Document:", values$current_doc_id)
+      }
+    })
 
-      format_document_info(
-        .dir = dir_r(),
-        .doc_id = values$current_doc_id,
+    # ===== DOCUMENT INFO DISPLAY (SIMPLIFIED) =====
+    output$doc_info <- shiny::renderText({
+      format_document_info_simple(
         .current_index = values$current_index,
         .total_filtered = length(values$filtered_doc_ids %||% character()),
-        .filter_type = input$doc_filter,
-        schema = schema_r(),
-        classification_nested = current_selections
+        .dir = dir_r()
       )
     })
 
@@ -256,6 +280,23 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       } else {
         shiny::HTML(values$current_doc$HTML[1])
       }
+    })
+
+    # ===== DOCUMENT CLASSIFICATIONS DISPLAY =====
+    output$document_classifications <- shiny::renderUI({
+      if (is.null(values$current_doc_id)) {
+        return(shiny::div(
+          style = "color: #999; font-style: italic;",
+          "No document selected"
+        ))
+      }
+
+      # Get current selections
+      current_selections <- shiny::reactiveValuesToList(selections)
+      sch <- schema_r()
+
+      # Build classification display
+      generate_classification_display(current_selections, sch)
     })
 
     # ===== SCHEMA TABS UI (DYNAMIC) =====
@@ -490,7 +531,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
     }
 
     shiny::observeEvent(input$target_filter, {
-      shiny::updateSelectInput(session, "doc_filter", selected = input$target_filter)
+      shiny::updateRadioButtons(session, "doc_filter", selected = input$target_filter)
       shiny::removeModal()
     })
 

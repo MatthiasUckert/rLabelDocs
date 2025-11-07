@@ -47,6 +47,7 @@ utils::globalVariables(c(
   # Data I/O variables
   "DocID", "HTML", "UserID", "Timestamp", "Schema", "Class", "Value",
   "SchemaName", ".", "everything", "where",
+  "NoteText",  # <-- ADD THIS LINE
   # Overview module variables
   "category", "count", "classifications", "ymax", "ymin", "Date", "documents",
   "fraction"

@@ -13,7 +13,6 @@ mod_classification_ui <- function(id) {
 
   shiny::fluidPage(
     classification_css(),
-
     shiny::fluidRow(
       # ===== LEFT SIDEBAR (3 columns) =====
       shiny::column(
@@ -129,7 +128,28 @@ mod_classification_ui <- function(id) {
                 style = "width: 32%;"
               )
             )
-          )
+          ),
+          # --- Notes Panel ---
+          shiny::wellPanel(
+            shiny::h5("Document Notes"),
+            shiny::div(
+              class = "notes-section",
+              shiny::textAreaInput(
+                ns("document_notes"),
+                label = NULL,
+                placeholder = "Add notes for this document...",
+                value = "",
+                width = "100%",
+                height = "100px",
+                resize = "vertical"
+              ),
+              shiny::div(
+                class = "notes-info",
+                style = "font-size: 11px; color: #666; margin-top: 5px;",
+                shiny::textOutput(ns("notes_metadata"))
+              )
+            )
+          ),
         )
       ),
 
@@ -146,7 +166,6 @@ mod_classification_ui <- function(id) {
               shiny::textOutput(ns("document_header_id"), inline = TRUE)
             )
           ),
-
           shiny::hr(),
 
           # Document content
@@ -176,7 +195,6 @@ mod_classification_ui <- function(id) {
 #' @export
 mod_classification_server <- function(id, .dir, .user_id, schema) {
   shiny::moduleServer(id, function(input, output, session) {
-
     # Make inputs reactive if they're not already
     dir_r <- if (shiny::is.reactive(.dir)) .dir else shiny::reactive(.dir)
     user_id_r <- if (shiny::is.reactive(.user_id)) .user_id else shiny::reactive(.user_id)
@@ -189,7 +207,8 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       filtered_doc_ids = NULL,
       current_index = 1,
       pending_search = NULL,
-      doc_filter = "unclassified"  # Track current filter
+      doc_filter = "unclassified", # Track current filter
+      current_note = NULL
     )
 
     # ===== FILTER BUTTON HANDLERS =====
@@ -212,14 +231,17 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
     update_filter_buttons <- function(active) {
       # Reset all buttons
       shiny::updateActionButton(session, "filter_all",
-                                label = "All Documents",
-                                icon = NULL)
+        label = "All Documents",
+        icon = NULL
+      )
       shiny::updateActionButton(session, "filter_classified",
-                                label = "Classified",
-                                icon = NULL)
+        label = "Classified",
+        icon = NULL
+      )
       shiny::updateActionButton(session, "filter_unclassified",
-                                label = "Unclassified",
-                                icon = NULL)
+        label = "Unclassified",
+        icon = NULL
+      )
 
       # Highlight active button using JavaScript
       session$sendCustomMessage("updateFilterButtons", active)
@@ -248,9 +270,9 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       filter_type <- values$doc_filter
 
       switch(filter_type,
-             "all" = get_docids(dir_r(), "All"),
-             "unclassified" = get_docids(dir_r(), "Unclassified"),
-             "classified" = get_docids(dir_r(), "Classified")
+        "all" = get_docids(dir_r(), "All"),
+        "unclassified" = get_docids(dir_r(), "Unclassified"),
+        "classified" = get_docids(dir_r(), "Classified")
       )
     })
 
@@ -283,6 +305,24 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
           for (class_name in names(class_nested[[schema_id]])) {
             selections[[schema_id]][[class_name]] <- class_nested[[schema_id]][[class_name]]
           }
+        }
+
+        # Load note (NEW)
+        note_df <- read_note(dir_r(), values$current_doc_id)
+        if (nrow(note_df) > 0) {
+          values$current_note <- note_df
+          shiny::updateTextAreaInput(
+            session,
+            "document_notes",
+            value = note_df$NoteText[1]
+          )
+        } else {
+          values$current_note <- NULL
+          shiny::updateTextAreaInput(
+            session,
+            "document_notes",
+            value = ""
+          )
         }
       }
     }
@@ -340,6 +380,18 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       generate_classification_display(current_selections, sch)
     })
 
+    output$notes_metadata <- shiny::renderText({
+      if (!is.null(values$current_note) && nrow(values$current_note) > 0) {
+        paste0(
+          "Last edited by ", values$current_note$UserID[1],
+          " on ", format(values$current_note$Timestamp[1], "%Y-%m-%d %H:%M")
+        )
+      } else {
+        ""
+      }
+    })
+
+
     # ===== SCHEMA TABS UI (DYNAMIC) =====
     output$schema_tabs_ui <- shiny::renderUI({
       sch <- schema_r()
@@ -367,7 +419,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
           schema_id,
           sch[[schema_id]],
           current_selections[[schema_id]] %||% list(),
-          mode  # Pass the mode parameter
+          mode # Pass the mode parameter
         )
 
         shiny::tabPanel(
@@ -387,7 +439,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       do.call(shiny::tabsetPanel, c(
         list(
           id = session$ns("schema_tabs"),
-          selected = current_tab  # Preserve active tab
+          selected = current_tab # Preserve active tab
         ),
         tab_panels
       ))
@@ -444,6 +496,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       current_selections <- shiny::reactiveValuesToList(selections)
 
       tryCatch({
+        # Save classifications
         save_classification(
           dir_r(),
           values$current_doc_id,
@@ -451,8 +504,30 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
           current_selections
         )
 
+        # Save note (NEW)
+        note_text <- input$document_notes
+        save_note(
+          dir_r(),
+          values$current_doc_id,
+          user_id_r(),
+          note_text
+        )
+
+        # Update current note metadata
+        if (!is.null(note_text) && nchar(trimws(note_text)) > 0) {
+          values$current_note <- data.frame(
+            DocID = values$current_doc_id,
+            UserID = user_id_r(),
+            Timestamp = Sys.time(),
+            NoteText = note_text,
+            stringsAsFactors = FALSE
+          )
+        } else {
+          values$current_note <- NULL
+        }
+
         shiny::showNotification(
-          "Classification saved!",
+          "Classification and notes saved!",
           type = "message",
           duration = 2
         )
@@ -561,8 +636,10 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
             session$ns("switch_filter_yes"),
             "Yes, Switch",
             class = "btn-primary",
-            onclick = sprintf("Shiny.setInputValue('%s', '%s')",
-                              session$ns("target_filter"), target_filter)
+            onclick = sprintf(
+              "Shiny.setInputValue('%s', '%s')",
+              session$ns("target_filter"), target_filter
+            )
           ),
           shiny::modalButton("Cancel")
         )
@@ -604,6 +681,5 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       shiny::updateTextInput(session, "search_doc_id", value = "")
       shiny::showNotification("Search cleared", type = "message", duration = 1)
     })
-
   })
 }

@@ -45,6 +45,9 @@ validate_project_directory <- function(.dir) {
   # Initialize ClassificationDetails.parquet if needed
   initialize_classification_file(.dir)
 
+  # Initialize Notes.parquet if needed (NEW - ADD THIS)
+  initialize_notes_file(.dir)
+
   # Success message
   doc_count <- get_document_count(.dir)
   schema <- read_schema(.dir)

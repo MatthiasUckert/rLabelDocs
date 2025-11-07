@@ -241,6 +241,49 @@ classification_css <- function() {
         margin-left: 5px;
       }
 
+      /* Notes section styling */
+      .notes-section {
+        margin-top: 10px;
+      }
+
+      .notes-section textarea {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 13px;
+        line-height: 1.5;
+        resize: vertical !important;
+        min-height: 100px;
+        max-height: 400px;
+      }
+
+      .notes-info {
+        font-size: 11px;
+        color: #666;
+        font-style: italic;
+      }
+
+      /* Notes display in browser (read-only) */
+      .notes-display {
+        background-color: #fffbea;
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 15px;
+        border-left: 3px solid #f39c12;
+      }
+
+      .notes-display .note-metadata {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 10px;
+        border-bottom: 1px solid #f0e6c8;
+        padding-bottom: 8px;
+      }
+
+      .notes-display .note-text {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        color: #2c3e50;
+      }
+
       /* Document content viewer */
       .document-content {
         height: 600px;

@@ -48,6 +48,17 @@ mod_browser_ui <- function(id) {
             shiny::uiOutput(ns("value_filter_ui"))
           ),
 
+          # Notes Filter (NEW - ADD THIS)
+          shiny::div(
+            class = "filter-section",
+            shiny::h5("Notes"),
+            shiny::checkboxInput(
+              ns("notes_filter"),
+              "Show only documents with notes",
+              value = FALSE
+            )
+          ),
+
           # Action Buttons
           shiny::div(
             style = "margin-top: 20px;",
@@ -122,7 +133,12 @@ mod_browser_ui <- function(id) {
           # Classifications for this document
           shiny::hr(),
           shiny::h5("Classifications"),
-          shiny::uiOutput(ns("document_classifications"))
+          shiny::uiOutput(ns("document_classifications")),
+
+          # Document Notes (NEW - ADD THIS)
+          shiny::hr(),
+          shiny::h5("Document Notes"),
+          shiny::uiOutput(ns("document_notes_display"))
         )
       )
     )
@@ -273,6 +289,13 @@ mod_browser_server <- function(id, .dir, schema) {
       # Get unique document IDs
       if (nrow(filtered) > 0) {
         doc_ids <- unique(filtered$DocID)
+
+        # Apply notes filter (NEW)
+        if (!is.null(input$notes_filter) && input$notes_filter) {
+          docs_with_notes <- get_docids_with_notes(dir_r())
+          doc_ids <- doc_ids[doc_ids %in% docs_with_notes]
+        }
+
         values$filtered_docs <- doc_ids
 
         # Select first document
@@ -322,7 +345,8 @@ mod_browser_server <- function(id, .dir, schema) {
       # Check if filters are active
       has_filters <- (!is.null(input$schema_select) && input$schema_select != "") ||
         (!is.null(input$class_select) && input$class_select != "") ||
-        (!is.null(input$value_select) && length(input$value_select) > 0)
+        (!is.null(input$value_select) && length(input$value_select) > 0) ||
+        (!is.null(input$notes_filter) && input$notes_filter)  # NEW
 
       sch <- schema_r()
 
@@ -345,13 +369,56 @@ mod_browser_server <- function(id, .dir, schema) {
         if (!is.null(input$value_select) && length(input$value_select) > 0) {
           filter_text <- paste0(
             filter_text,
-            "Values: ", paste(input$value_select, collapse = ", ")
+            "Values: ", paste(input$value_select, collapse = ", "), "\n"
           )
+        }
+
+        # NEW
+        if (!is.null(input$notes_filter) && input$notes_filter) {
+          filter_text <- paste0(filter_text, "Notes: Only documents with notes\n")
         }
       }
 
       filter_text
     })
+
+
+    output$document_notes_display <- shiny::renderUI({
+      if (is.null(values$selected_doc_id)) {
+        return(shiny::div(
+          style = "color: #999; font-style: italic;",
+          "Select a document to view notes"
+        ))
+      }
+
+      note_df <- read_note(dir_r(), values$selected_doc_id)
+
+      if (nrow(note_df) == 0) {
+        return(shiny::div(
+          style = "color: #999; font-style: italic;",
+          "No notes for this document"
+        ))
+      }
+
+      # Display note with metadata
+      shiny::div(
+        class = "notes-display",
+        shiny::div(
+          style = "font-size: 11px; color: #666; margin-bottom: 10px;",
+          shiny::strong("Last edited by: "), note_df$UserID[1], " | ",
+          shiny::strong("Timestamp: "), format(note_df$Timestamp[1], "%Y-%m-%d %H:%M")
+        ),
+        shiny::div(
+          style = "background-color: #fffbea; padding: 15px; border-radius: 5px; border-left: 3px solid #f39c12; white-space: pre-wrap;",
+          note_df$NoteText[1]
+        )
+      )
+    })
+
+
+
+
+
 
     # ===== DOCUMENT LIST UI =====
     get_displayed_docs <- shiny::reactive({

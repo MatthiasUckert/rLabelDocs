@@ -319,3 +319,149 @@ initialize_classification_file <- function(.dir) {
 
   invisible(NULL)
 }
+
+
+# NOTES FUNCTIONS - Add these to R/data_io.R at the end of the file
+
+# ===== NOTES FUNCTIONS =====
+
+#' Initialize Notes File
+#'
+#' Creates empty Notes.parquet if it doesn't exist.
+#'
+#' @param .dir Path to project directory
+#' @return Invisible NULL
+#' @keywords internal
+initialize_notes_file <- function(.dir) {
+  file_notes <- file.path(.dir, "Notes.parquet")
+
+  if (!file.exists(file_notes)) {
+    empty_df <- data.frame(
+      DocID = character(),
+      UserID = character(),
+      Timestamp = as.POSIXct(character()),
+      NoteText = character(),
+      stringsAsFactors = FALSE
+    )
+
+    arrow::write_parquet(empty_df, file_notes)
+  }
+
+  invisible(NULL)
+}
+
+#' Read Note for Document
+#'
+#' Loads the note for a specific document.
+#'
+#' @param .dir Path to project directory
+#' @param .doc_id Document ID to load note for
+#' @return Data frame with columns: DocID, UserID, Timestamp, NoteText
+#'   Returns empty data frame if no note exists
+#' @export
+read_note <- function(.dir, .doc_id) {
+  file_notes <- file.path(.dir, "Notes.parquet")
+
+  if (!file.exists(file_notes)) {
+    return(data.frame(
+      DocID = character(),
+      UserID = character(),
+      Timestamp = as.POSIXct(character()),
+      NoteText = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  arrow::open_dataset(file_notes) %>%
+    dplyr::filter(DocID == .doc_id) %>%
+    dplyr::collect()
+}
+
+#' Save Note for Document
+#'
+#' Saves or updates the note for a document. If note_text is empty or NULL,
+#' removes the note for this document.
+#'
+#' @param .dir Path to project directory
+#' @param .doc_id Document ID
+#' @param .user_id User making the note
+#' @param .note_text Note text (character)
+#' @return Invisible NULL
+#' @export
+save_note <- function(.dir, .doc_id, .user_id, .note_text) {
+  file_notes <- file.path(.dir, "Notes.parquet")
+
+  # Initialize file if it doesn't exist
+  initialize_notes_file(.dir)
+
+  # Load existing notes
+  existing_df <- arrow::read_parquet(file_notes)
+
+  # Remove old note for this document
+  existing_df <- existing_df[existing_df$DocID != .doc_id, ]
+
+  # If note text is not empty, add new note
+  if (!is.null(.note_text) && nchar(trimws(.note_text)) > 0) {
+    new_note <- data.frame(
+      DocID = .doc_id,
+      UserID = .user_id,
+      Timestamp = Sys.time(),
+      NoteText = .note_text,
+      stringsAsFactors = FALSE
+    )
+
+    combined_df <- dplyr::bind_rows(existing_df, new_note)
+  } else {
+    # Empty note = remove entry
+    combined_df <- existing_df
+  }
+
+  # Write back
+  arrow::write_parquet(combined_df, file_notes)
+
+  invisible(NULL)
+}
+
+#' Get Document IDs with Notes
+#'
+#' Returns list of document IDs that have notes.
+#'
+#' @param .dir Path to project directory
+#' @return Character vector of document IDs
+#' @export
+get_docids_with_notes <- function(.dir) {
+  file_notes <- file.path(.dir, "Notes.parquet")
+
+  if (!file.exists(file_notes)) {
+    return(character(0))
+  }
+
+  arrow::open_dataset(file_notes) %>%
+    dplyr::select(DocID) %>%
+    dplyr::distinct() %>%
+    dplyr::collect() %>%
+    dplyr::pull(DocID)
+}
+
+#' Read All Notes
+#'
+#' Loads all notes from the database.
+#'
+#' @param .dir Path to project directory
+#' @return Data frame with all note records
+#' @export
+read_all_notes <- function(.dir) {
+  file_notes <- file.path(.dir, "Notes.parquet")
+
+  if (!file.exists(file_notes)) {
+    return(data.frame(
+      DocID = character(),
+      UserID = character(),
+      Timestamp = as.POSIXct(character()),
+      NoteText = character(),
+      stringsAsFactors = FALSE
+    ))
+  }
+
+  arrow::read_parquet(file_notes)
+}

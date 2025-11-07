@@ -30,6 +30,79 @@ mod_overview_ui <- function(id) {
       )
     ),
 
+    shiny::fluidRow(
+      shiny::column(
+        12,
+        shiny::wellPanel(
+          style = "background-color: #f8f9fa; border: 2px solid #3498db;",
+          shiny::h4("Export Data", style = "margin-top: 0; color: #2c3e50;"),
+
+          shiny::fluidRow(
+            shiny::column(
+              8,
+              shiny::p(
+                "Export your classification data and notes to CSV or Parquet format.",
+                style = "color: #666; margin-bottom: 15px;"
+              ),
+
+              # Export buttons
+              shiny::div(
+                style = "display: flex; gap: 10px; flex-wrap: wrap;",
+
+                shiny::actionButton(
+                  ns("export_current_btn"),
+                  "Export Current State",
+                  icon = shiny::icon("download"),
+                  class = "btn-primary",
+                  style = "flex: 1; min-width: 200px;"
+                ),
+
+                shiny::actionButton(
+                  ns("export_history_btn"),
+                  "Export Full History",
+                  icon = shiny::icon("history"),
+                  class = "btn-info",
+                  style = "flex: 1; min-width: 200px;"
+                ),
+
+                shiny::actionButton(
+                  ns("view_exports_btn"),
+                  "View Exports",
+                  icon = shiny::icon("folder-open"),
+                  class = "btn-secondary",
+                  style = "flex: 1; min-width: 200px;"
+                )
+              )
+            ),
+
+            shiny::column(
+              4,
+              shiny::div(
+                style = "background-color: white; padding: 15px; border-radius: 5px; border-left: 3px solid #3498db;",
+                shiny::h5("Export Info", style = "margin-top: 0; color: #3498db;"),
+                shiny::p(
+                  style = "font-size: 12px; margin-bottom: 5px;",
+                  shiny::strong("Current State:"), " Latest classifications and notes"
+                ),
+                shiny::p(
+                  style = "font-size: 12px; margin-bottom: 0;",
+                  shiny::strong("Full History:"), " All versions with timestamps"
+                )
+              )
+            )
+          ),
+
+          # Status message area
+          shiny::div(
+            id = ns("export_status"),
+            style = "margin-top: 15px;",
+            shiny::uiOutput(ns("export_message"))
+          )
+        )
+      )
+    ),
+
+
     # ===== KEY METRICS ROW =====
     shiny::fluidRow(
       shiny::column(
@@ -370,6 +443,564 @@ mod_overview_server <- function(id, .dir, schema) {
         class = 'cell-border stripe'
       )
     })
+
+    export_status <- shiny::reactiveVal(NULL)
+
+    output$export_message <- shiny::renderUI({
+      msg <- export_status()
+      if (is.null(msg)) return(NULL)
+
+      shiny::div(
+        class = if (msg$type == "success") "alert alert-success" else "alert alert-info",
+        style = "padding: 10px; margin: 0;",
+        shiny::icon(if (msg$type == "success") "check-circle" else "info-circle"),
+        " ", msg$text,
+        if (!is.null(msg$link)) {
+          shiny::tagList(
+            shiny::br(),
+            shiny::a(
+              href = msg$link,
+              download = basename(msg$link),
+              "Download file",
+              style = "color: #fff; text-decoration: underline; font-weight: bold;"
+            )
+          )
+        }
+      )
+    })
+
+    # Export Current State button
+    shiny::observeEvent(input$export_current_btn, {
+      show_export_modal("current")
+    })
+
+    # Export Full History button
+    shiny::observeEvent(input$export_history_btn, {
+      show_export_modal("history")
+    })
+
+    # Show export modal
+    show_export_modal <- function(scope) {
+      shiny::showModal(shiny::modalDialog(
+        title = if (scope == "current") "Export Current State" else "Export Full History",
+        size = "m",
+
+        shiny::div(
+          style = "padding: 10px;",
+
+          # Format selection
+          shiny::radioButtons(
+            session$ns("export_format"),
+            "Export Format:",
+            choices = c(
+              "CSV (Compatible with Excel)" = "csv",
+              "Parquet (Efficient, compressed)" = "parquet"
+            ),
+            selected = "csv"
+          ),
+
+          # Content selection
+          shiny::radioButtons(
+            session$ns("export_content"),
+            "What to export:",
+            choices = c(
+              "Classifications and Notes" = "both",
+              "Classifications only" = "classifications",
+              "Notes only" = "notes"
+            ),
+            selected = "both"
+          ),
+
+          # Info box
+          shiny::div(
+            style = "background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin-top: 15px;",
+            shiny::h5("Export Details:", style = "margin-top: 0; color: #1976d2;"),
+            shiny::p(
+              style = "font-size: 13px; margin-bottom: 5px;",
+              shiny::strong("Scope: "),
+              if (scope == "current") "Latest classifications and notes only" else "All versions with complete history"
+            ),
+            shiny::p(
+              style = "font-size: 13px; margin-bottom: 0;",
+              shiny::strong("Location: "), "exports/ folder in project directory"
+            )
+          )
+        ),
+
+        footer = shiny::tagList(
+          shiny::actionButton(
+            session$ns("confirm_export"),
+            "Export",
+            class = "btn-primary",
+            icon = shiny::icon("download"),
+            onclick = sprintf("Shiny.setInputValue('%s', '%s')", session$ns("export_scope"), scope)
+          ),
+          shiny::modalButton("Cancel")
+        )
+      ))
+    }
+
+    # Confirm export
+    shiny::observeEvent(input$confirm_export, {
+      scope <- input$export_scope
+      format <- input$export_format
+      content <- input$export_content
+
+      shiny::removeModal()
+
+      # Show progress
+      export_status(list(
+        type = "info",
+        text = "Exporting data...",
+        link = NULL
+      ))
+
+      tryCatch({
+        # Perform export
+        filepath <- NULL
+
+        if (content == "both") {
+          if (scope == "current") {
+            filepath <- export_current_state(dir_r(), format, .include_notes = TRUE)
+          } else {
+            filepath <- export_full_history(dir_r(), format, .include_notes = TRUE)
+          }
+        } else if (content == "classifications") {
+          filepath <- export_classifications(dir_r(), format, scope)
+        } else {
+          filepath <- export_notes(dir_r(), format, scope)
+        }
+
+        # Get file info
+        file_info <- file.info(filepath)
+        file_size <- round(file_info$size / 1024, 1)  # KB
+
+        # Success message
+        export_status(list(
+          type = "success",
+          text = paste0(
+            "Export successful! ",
+            "File: ", basename(filepath), " (",
+            file_size, " KB)"
+          ),
+          link = filepath
+        ))
+
+        # Clear message after 10 seconds
+        shiny::invalidateLater(10000)
+        shiny::observe({
+          export_status(NULL)
+        })
+
+      }, error = function(e) {
+        export_status(list(
+          type = "error",
+          text = paste("Export failed:", e$message),
+          link = NULL
+        ))
+      })
+    })
+
+    # View Exports button
+    shiny::observeEvent(input$view_exports_btn, {
+      show_exports_modal()
+    })
+
+    # Show exports list modal
+    show_exports_modal <- function() {
+      exports_list <- list_exports(dir_r())
+
+      if (nrow(exports_list) == 0) {
+        content <- shiny::div(
+          style = "text-align: center; padding: 30px; color: #999;",
+          shiny::icon("folder-open", style = "font-size: 48px; margin-bottom: 15px;"),
+          shiny::h4("No exports yet"),
+          shiny::p("Export data using the buttons above to see files here.")
+        )
+      } else {
+        # Create table of exports
+        content <- shiny::div(
+          style = "max-height: 400px; overflow-y: auto;",
+          shiny::tags$table(
+            class = "table table-striped table-hover",
+            shiny::tags$thead(
+              shiny::tags$tr(
+                shiny::tags$th("Filename"),
+                shiny::tags$th("Size"),
+                shiny::tags$th("Modified"),
+                shiny::tags$th("Actions")
+              )
+            ),
+            shiny::tags$tbody(
+              lapply(seq_len(nrow(exports_list)), function(i) {
+                row <- exports_list[i, ]
+                shiny::tags$tr(
+                  shiny::tags$td(
+                    shiny::tags$code(row$filename)
+                  ),
+                  shiny::tags$td(
+                    paste0(row$size_mb, " MB")
+                  ),
+                  shiny::tags$td(
+                    format(row$modified, "%Y-%m-%d %H:%M")
+                  ),
+                  shiny::tags$td(
+                    shiny::div(
+                      style = "display: flex; gap: 5px;",
+                      shiny::a(
+                        href = row$path,
+                        download = row$filename,
+                        class = "btn btn-sm btn-primary",
+                        shiny::icon("download"),
+                        " Download"
+                      ),
+                      shiny::actionButton(
+                        session$ns(paste0("delete_", i)),
+                        label = NULL,
+                        icon = shiny::icon("trash"),
+                        class = "btn btn-sm btn-danger",
+                        onclick = sprintf(
+                          "Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                          session$ns("delete_export"),
+                          row$filename
+                        )
+                      )
+                    )
+                  )
+                )
+              })
+            )
+          )
+        )
+      }
+
+      shiny::showModal(shiny::modalDialog(
+        title = "Exported Files",
+        size = "l",
+        content,
+        footer = shiny::tagList(
+          shiny::actionButton(
+            session$ns("refresh_exports"),
+            "Refresh",
+            icon = shiny::icon("sync")
+          ),
+          shiny::modalButton("Close")
+        )
+      ))
+    }
+
+    # Delete export
+    shiny::observeEvent(input$delete_export, {
+      filename <- input$delete_export
+
+      success <- delete_export(dir_r(), filename)
+
+      if (success) {
+        shiny::showNotification(
+          paste("Deleted:", filename),
+          type = "message",
+          duration = 3
+        )
+        # Refresh modal
+        show_exports_modal()
+      } else {
+        shiny::showNotification(
+          paste("Failed to delete:", filename),
+          type = "error",
+          duration = 5
+        )
+      }
+    })
+
+    # Refresh exports list
+    shiny::observeEvent(input$refresh_exports, {
+      show_exports_modal()
+    })
+
+
+
+    export_status <- shiny::reactiveVal(NULL)
+
+    output$export_message <- shiny::renderUI({
+      msg <- export_status()
+      if (is.null(msg)) return(NULL)
+
+      shiny::div(
+        class = if (msg$type == "success") "alert alert-success" else "alert alert-info",
+        style = "padding: 10px; margin: 0;",
+        shiny::icon(if (msg$type == "success") "check-circle" else "info-circle"),
+        " ", msg$text,
+        if (!is.null(msg$link)) {
+          shiny::tagList(
+            shiny::br(),
+            shiny::a(
+              href = msg$link,
+              download = basename(msg$link),
+              "Download file",
+              style = "color: #fff; text-decoration: underline; font-weight: bold;"
+            )
+          )
+        }
+      )
+    })
+
+    # Export Current State button
+    shiny::observeEvent(input$export_current_btn, {
+      show_export_modal("current")
+    })
+
+    # Export Full History button
+    shiny::observeEvent(input$export_history_btn, {
+      show_export_modal("history")
+    })
+
+    # Show export modal
+    show_export_modal <- function(scope) {
+      shiny::showModal(shiny::modalDialog(
+        title = if (scope == "current") "Export Current State" else "Export Full History",
+        size = "m",
+
+        shiny::div(
+          style = "padding: 10px;",
+
+          # Format selection
+          shiny::radioButtons(
+            session$ns("export_format"),
+            "Export Format:",
+            choices = c(
+              "CSV (Compatible with Excel)" = "csv",
+              "Parquet (Efficient, compressed)" = "parquet"
+            ),
+            selected = "csv"
+          ),
+
+          # Content selection
+          shiny::radioButtons(
+            session$ns("export_content"),
+            "What to export:",
+            choices = c(
+              "Classifications and Notes" = "both",
+              "Classifications only" = "classifications",
+              "Notes only" = "notes"
+            ),
+            selected = "both"
+          ),
+
+          # Info box
+          shiny::div(
+            style = "background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin-top: 15px;",
+            shiny::h5("Export Details:", style = "margin-top: 0; color: #1976d2;"),
+            shiny::p(
+              style = "font-size: 13px; margin-bottom: 5px;",
+              shiny::strong("Scope: "),
+              if (scope == "current") "Latest classifications and notes only" else "All versions with complete history"
+            ),
+            shiny::p(
+              style = "font-size: 13px; margin-bottom: 0;",
+              shiny::strong("Location: "), "exports/ folder in project directory"
+            )
+          )
+        ),
+
+        footer = shiny::tagList(
+          shiny::actionButton(
+            session$ns("confirm_export"),
+            "Export",
+            class = "btn-primary",
+            icon = shiny::icon("download"),
+            onclick = sprintf("Shiny.setInputValue('%s', '%s')", session$ns("export_scope"), scope)
+          ),
+          shiny::modalButton("Cancel")
+        )
+      ))
+    }
+
+    # Confirm export
+    shiny::observeEvent(input$confirm_export, {
+      scope <- input$export_scope
+      format <- input$export_format
+      content <- input$export_content
+
+      shiny::removeModal()
+
+      # Show progress
+      export_status(list(
+        type = "info",
+        text = "Exporting data...",
+        link = NULL
+      ))
+
+      tryCatch({
+        # Perform export
+        filepath <- NULL
+
+        if (content == "both") {
+          if (scope == "current") {
+            filepath <- export_current_state(dir_r(), format, .include_notes = TRUE)
+          } else {
+            filepath <- export_full_history(dir_r(), format, .include_notes = TRUE)
+          }
+        } else if (content == "classifications") {
+          filepath <- export_classifications(dir_r(), format, scope)
+        } else {
+          filepath <- export_notes(dir_r(), format, scope)
+        }
+
+        # Get file info
+        file_info <- file.info(filepath)
+        file_size <- round(file_info$size / 1024, 1)  # KB
+
+        # Success message
+        export_status(list(
+          type = "success",
+          text = paste0(
+            "Export successful! ",
+            "File: ", basename(filepath), " (",
+            file_size, " KB)"
+          ),
+          link = filepath
+        ))
+
+        # Clear message after 10 seconds
+        shiny::invalidateLater(10000)
+        shiny::observe({
+          export_status(NULL)
+        })
+
+      }, error = function(e) {
+        export_status(list(
+          type = "error",
+          text = paste("Export failed:", e$message),
+          link = NULL
+        ))
+      })
+    })
+
+    # View Exports button
+    shiny::observeEvent(input$view_exports_btn, {
+      show_exports_modal()
+    })
+
+    # Show exports list modal
+    show_exports_modal <- function() {
+      exports_list <- list_exports(dir_r())
+
+      if (nrow(exports_list) == 0) {
+        content <- shiny::div(
+          style = "text-align: center; padding: 30px; color: #999;",
+          shiny::icon("folder-open", style = "font-size: 48px; margin-bottom: 15px;"),
+          shiny::h4("No exports yet"),
+          shiny::p("Export data using the buttons above to see files here.")
+        )
+      } else {
+        # Create table of exports
+        content <- shiny::div(
+          style = "max-height: 400px; overflow-y: auto;",
+          shiny::tags$table(
+            class = "table table-striped table-hover",
+            shiny::tags$thead(
+              shiny::tags$tr(
+                shiny::tags$th("Filename"),
+                shiny::tags$th("Size"),
+                shiny::tags$th("Modified"),
+                shiny::tags$th("Actions")
+              )
+            ),
+            shiny::tags$tbody(
+              lapply(seq_len(nrow(exports_list)), function(i) {
+                row <- exports_list[i, ]
+                shiny::tags$tr(
+                  shiny::tags$td(
+                    shiny::tags$code(row$filename)
+                  ),
+                  shiny::tags$td(
+                    paste0(row$size_mb, " MB")
+                  ),
+                  shiny::tags$td(
+                    format(row$modified, "%Y-%m-%d %H:%M")
+                  ),
+                  shiny::tags$td(
+                    shiny::div(
+                      style = "display: flex; gap: 5px;",
+                      shiny::a(
+                        href = row$path,
+                        download = row$filename,
+                        class = "btn btn-sm btn-primary",
+                        shiny::icon("download"),
+                        " Download"
+                      ),
+                      shiny::actionButton(
+                        session$ns(paste0("delete_", i)),
+                        label = NULL,
+                        icon = shiny::icon("trash"),
+                        class = "btn btn-sm btn-danger",
+                        onclick = sprintf(
+                          "Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+                          session$ns("delete_export"),
+                          row$filename
+                        )
+                      )
+                    )
+                  )
+                )
+              })
+            )
+          )
+        )
+      }
+
+      shiny::showModal(shiny::modalDialog(
+        title = "Exported Files",
+        size = "l",
+        content,
+        footer = shiny::tagList(
+          shiny::actionButton(
+            session$ns("refresh_exports"),
+            "Refresh",
+            icon = shiny::icon("sync")
+          ),
+          shiny::modalButton("Close")
+        )
+      ))
+    }
+
+    # Delete export
+    shiny::observeEvent(input$delete_export, {
+      filename <- input$delete_export
+
+      success <- delete_export(dir_r(), filename)
+
+      if (success) {
+        shiny::showNotification(
+          paste("Deleted:", filename),
+          type = "message",
+          duration = 3
+        )
+        # Refresh modal
+        show_exports_modal()
+      } else {
+        shiny::showNotification(
+          paste("Failed to delete:", filename),
+          type = "error",
+          duration = 5
+        )
+      }
+    })
+
+    # Refresh exports list
+    shiny::observeEvent(input$refresh_exports, {
+      show_exports_modal()
+    })
+
+
+
+
+
+
+
+
+
+
 
   })
 }

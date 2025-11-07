@@ -41,13 +41,26 @@ parse_schema_class_key <- function(key) {
   )
 }
 
+#' Generate Session ID
+#'
+#' Creates a unique session ID for grouping related database operations.
+#' Format: YYYYMMDD_HHMMSS_randomstring
+#'
+#' @return Character session ID
+#' @export
+generate_session_id <- function() {
+  timestamp <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  random_part <- paste(sample(c(letters, 0:9), 8, replace = TRUE), collapse = "")
+  paste0(timestamp, "_", random_part)
+}
+
 #' Suppress NSE warnings
 #' @keywords internal
 utils::globalVariables(c(
   # Data I/O variables
   "DocID", "HTML", "UserID", "Timestamp", "Schema", "Class", "Value",
   "SchemaName", ".", "everything", "where",
-  "NoteText",  # <-- ADD THIS LINE
+  "NoteText",
   # Overview module variables
   "category", "count", "classifications", "ymax", "ymin", "Date", "documents",
   "fraction"

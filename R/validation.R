@@ -3,6 +3,7 @@
 # - Directory structure
 # - Schema files
 # - Document files
+# - SQLite database
 # - Input parameters
 
 #' Validate Project Directory
@@ -42,11 +43,8 @@ validate_project_directory <- function(.dir) {
   # Validate schema file
   validate_schema_file(.dir)
 
-  # Initialize ClassificationDetails.parquet if needed
-  initialize_classification_file(.dir)
-
-  # Initialize Notes.parquet if needed (NEW - ADD THIS)
-  initialize_notes_file(.dir)
+  # Initialize SQLite database if needed
+  initialize_database(.dir)
 
   # Success message
   doc_count <- get_document_count(.dir)
@@ -55,6 +53,7 @@ validate_project_directory <- function(.dir) {
   message("\u2713 Directory structure valid")
   message("\u2713 Found ", doc_count, " documents")
   message("\u2713 Found ", length(schema), " classification schema(s)")
+  message("\u2713 SQLite database ready")
 
   return(TRUE)
 }

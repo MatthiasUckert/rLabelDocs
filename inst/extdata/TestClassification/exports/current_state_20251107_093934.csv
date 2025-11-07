@@ -1,0 +1,5 @@
+DocID,UserID,Timestamp,Schema,Class,Value
+0000001750-8f452cd44a90f9e02d4ee91b0df6588c,matthiasuckert,2025-11-07T08:24:16Z,1,Amendment,Amended
+0000001750-8f452cd44a90f9e02d4ee91b0df6588c,matthiasuckert,2025-11-07T08:24:16Z,1,DocClasses,PurchaseSales-Assets
+0000001750-8f452cd44a90f9e02d4ee91b0df6588c,matthiasuckert,2025-11-07T08:24:16Z,2,Amendment,Amended (Test)
+0000001750-8f452cd44a90f9e02d4ee91b0df6588c,matthiasuckert,2025-11-07T08:24:16Z,2,DocClasses,PurchaseSales-InventoryService (Test)

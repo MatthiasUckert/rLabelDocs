@@ -196,7 +196,7 @@ load_app_css <- function() {
     shiny::tags$link(
       rel = "stylesheet",
       type = "text/css",
-      href = "inst/www/styles.css"
+      href = "styles.css"
     ),
     # JavaScript for filter button updates
     shiny::tags$script(shiny::HTML("

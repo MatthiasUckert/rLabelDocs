@@ -59,7 +59,7 @@ generate_schema_tab_content <- function(ns, schema_id, schema, current_selection
     # Get values for this class
     values <- schema$classes[[class_name]]
 
-    # Get current selections for this class
+    # Get current selections for this class (using %||% for NULL handling)
     selected_values <- current_selections[[class_name]] %||% character(0)
 
     # Generate dropdown
@@ -157,9 +157,9 @@ generate_classification_display <- function(classification_nested, schema) {
   shiny::tagList(class_displays)
 }
 
-#' Generate Filter Dropdown Choices
+#' Generate Filter Dropdown Choices with Counts
 #'
-#' Creates choices list for document filter dropdown with counts.
+#' Creates choices list for document filter dropdown with document counts.
 #'
 #' @param .dir Path to project directory
 #' @return Named character vector for selectInput choices
@@ -168,9 +168,9 @@ generate_filter_choices <- function(.dir) {
   counts <- get_filter_counts(.dir)
 
   c(
-    "All Documents" = "all",
-    "Unclassified" = "unclassified",
-    "Classified" = "classified"
+    "all" = paste0("All Documents (", counts$all, ")"),
+    "classified" = paste0("Classified (", counts$classified, ")"),
+    "unclassified" = paste0("Unclassified (", counts$unclassified, ")")
   )
 }
 
@@ -185,196 +185,20 @@ get_schema_tab_id <- function(schema_id) {
   paste0("schema_", schema_id)
 }
 
-#' CSS for Classification Interface
+#' Load External CSS
 #'
-#' Returns CSS styling for classification components.
+#' Loads the external CSS file for the application.
 #'
-#' @return HTML head tag with CSS
-#' @keywords internal
-classification_css <- function() {
+#' @return HTML head tag with CSS link
+#' @export
+load_app_css <- function() {
   shiny::tags$head(
-    shiny::tags$style(shiny::HTML("
-      /* Classification groups and dropdowns */
-      .classification-group {
-        margin-bottom: 15px;
-      }
-
-      .classification-title {
-        color: #2c3e50;
-        margin-bottom: 10px;
-        font-weight: 600;
-        font-size: 14px;
-      }
-
-      /* Selectize styling */
-      .selectize-input {
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        padding: 6px 8px;
-        font-size: 14px;
-      }
-
-      .selectize-input.focus {
-        border-color: #80bdff;
-        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
-      }
-
-      .selectize-dropdown {
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        font-size: 14px;
-      }
-
-      /* Tags in multi-select */
-      .selectize-input .item {
-        background-color: #3498db;
-        color: white;
-        border: none;
-        padding: 2px 8px;
-        margin: 2px;
-        border-radius: 3px;
-      }
-
-      .selectize-input .remove {
-        border-left: 1px solid rgba(255,255,255,0.3);
-        padding-left: 5px;
-        margin-left: 5px;
-      }
-
-      /* Notes section styling */
-      .notes-section {
-        margin-top: 10px;
-      }
-
-      .notes-section textarea {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        font-size: 13px;
-        line-height: 1.5;
-        resize: vertical !important;
-        min-height: 100px;
-        max-height: 400px;
-      }
-
-      .notes-info {
-        font-size: 11px;
-        color: #666;
-        font-style: italic;
-      }
-
-      /* Notes display in browser (read-only) */
-      .notes-display {
-        background-color: #fffbea;
-        padding: 15px;
-        border-radius: 5px;
-        margin-top: 15px;
-        border-left: 3px solid #f39c12;
-      }
-
-      .notes-display .note-metadata {
-        font-size: 11px;
-        color: #666;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #f0e6c8;
-        padding-bottom: 8px;
-      }
-
-      .notes-display .note-text {
-        white-space: pre-wrap;
-        word-wrap: break-word;
-        color: #2c3e50;
-      }
-
-      /* Document content viewer */
-      .document-content {
-        height: 600px;
-        overflow-y: auto;
-        padding: 20px;
-        border: 1px solid #ddd;
-        background: white;
-        border-radius: 5px;
-      }
-
-      /* Sidebar styling */
-      .sidebar {
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 5px;
-      }
-
-      /* Filter panel */
-      .filter-panel {
-        background-color: #e9ecef;
-        padding: 10px;
-        margin-bottom: 10px;
-        border-radius: 5px;
-      }
-
-      /* Filter buttons */
-      .filter-btn {
-        font-weight: 500;
-        transition: all 0.2s;
-      }
-
-      .filter-btn:hover {
-        opacity: 0.8;
-      }
-
-      .filter-btn-active {
-        background-color: #007bff !important;
-        color: white !important;
-        border-color: #007bff !important;
-      }
-
-      /* Selection mode toggle */
-      .selection-mode-panel {
-        background-color: #fff3cd;
-        padding: 10px;
-        margin-bottom: 10px;
-        border-radius: 5px;
-        border: 1px solid #ffc107;
-      }
-
-      /* Schema tabs */
-      .nav-tabs .nav-link.active {
-        font-weight: 600;
-        background-color: #ffffff !important;
-        border-color: #dee2e6 #dee2e6 #fff !important;
-      }
-
-      /* Action buttons */
-      .action-buttons {
-        margin-top: 15px;
-      }
-
-      .action-buttons .btn {
-        margin: 2px;
-      }
-
-      /* Well panels */
-      .well {
-        background-color: white;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        padding: 20px;
-        margin-bottom: 10px;
-      }
-
-      /* Document viewer header */
-      .viewer-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      /* Classification display (read-only) */
-      .classification-display {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 10px;
-        border-left: 3px solid #3498db;
-      }
-    ")),
+    shiny::tags$link(
+      rel = "stylesheet",
+      type = "text/css",
+      href = "styles.css"
+    ),
+    # JavaScript for filter button updates
     shiny::tags$script(shiny::HTML("
       Shiny.addCustomMessageHandler('updateFilterButtons', function(active) {
         // Remove active class from all filter buttons

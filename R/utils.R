@@ -54,6 +54,52 @@ generate_session_id <- function() {
   paste0(timestamp, "_", random_part)
 }
 
+#' Mark Documents
+#'
+#' Adds document IDs to the marked documents list.
+#'
+#' @param marked_docs ReactiveValues object with 'ids' component
+#' @param doc_ids Character vector of document IDs to mark
+#' @return Invisible NULL
+#' @export
+mark_documents <- function(marked_docs, doc_ids) {
+  if (!is.null(marked_docs)) {
+    marked_docs$ids <- unique(c(marked_docs$ids, doc_ids))
+  }
+  invisible(NULL)
+}
+
+#' Unmark Documents
+#'
+#' Removes document IDs from the marked documents list.
+#'
+#' @param marked_docs ReactiveValues object with 'ids' component
+#' @param doc_ids Character vector of document IDs to unmark
+#' @return Invisible NULL
+#' @export
+unmark_documents <- function(marked_docs, doc_ids) {
+  if (!is.null(marked_docs)) {
+    marked_docs$ids <- setdiff(marked_docs$ids, doc_ids)
+  }
+  invisible(NULL)
+}
+
+#' Clear All Marks
+#'
+#' Clears all marked documents.
+#'
+#' @param marked_docs ReactiveValues object with 'ids' component
+#' @return Integer count of cleared marks
+#' @export
+clear_all_marks <- function(marked_docs) {
+  if (!is.null(marked_docs)) {
+    count <- length(marked_docs$ids)
+    marked_docs$ids <- character(0)
+    return(count)
+  }
+  return(0L)
+}
+
 #' Suppress NSE warnings
 #' @keywords internal
 utils::globalVariables(c(

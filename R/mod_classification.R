@@ -12,7 +12,7 @@ mod_classification_ui <- function(id) {
   ns <- shiny::NS(id)
 
   shiny::fluidPage(
-    classification_css(),
+    load_app_css(),
     shiny::fluidRow(
 
       # ===== LEFT SIDEBAR (3 columns) =====
@@ -297,9 +297,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
           selections[[schema_id]] <- list()
         }
         for (class_name in names(sch[[schema_id]]$classes)) {
-          if (is.null(selections[[schema_id]][[class_name]])) {
-            selections[[schema_id]][[class_name]] <- character(0)
-          }
+          selections[[schema_id]][[class_name]] <- selections[[schema_id]][[class_name]] %||% character(0)
         }
       }
     })
@@ -312,13 +310,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
         "all" = get_docids(dir_r(), "All"),
         "unclassified" = get_docids(dir_r(), "Unclassified"),
         "classified" = get_docids(dir_r(), "Classified"),
-        "marked" = {
-          if (!is.null(marked_docs)) {
-            marked_docs$ids
-          } else {
-            character(0)
-          }
-        }
+        "marked" = marked_docs$ids %||% character(0)
       )
     })
 
@@ -375,11 +367,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
 
     # ===== DOCUMENT HEADER ID =====
     output$document_header_id <- shiny::renderText({
-      if (is.null(values$current_doc_id)) {
-        "No document selected"
-      } else {
-        paste("Document:", values$current_doc_id)
-      }
+      values$current_doc_id %||% "No document selected"
     })
 
     # ===== DOCUMENT INFO DISPLAY (SIMPLIFIED) =====
@@ -427,10 +415,11 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
     })
 
     output$notes_metadata <- shiny::renderText({
-      if (!is.null(values$current_note) && nrow(values$current_note) > 0) {
+      note <- values$current_note
+      if (!is.null(note) && nrow(note) > 0) {
         paste0(
-          "Last edited by ", values$current_note$UserID[1],
-          " on ", format(values$current_note$Timestamp[1], "%Y-%m-%d %H:%M")
+          "Last edited by ", note$UserID[1],
+          " on ", format(note$Timestamp[1], "%Y-%m-%d %H:%M")
         )
       } else {
         ""
@@ -475,11 +464,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       })
 
       # Preserve currently active tab when re-rendering
-      current_tab <- input$schema_tabs
-      if (is.null(current_tab)) {
-        # Default to first schema tab
-        current_tab <- get_schema_tab_id(completion$schema_id[1])
-      }
+      current_tab <- input$schema_tabs %||% get_schema_tab_id(completion$schema_id[1])
 
       do.call(shiny::tabsetPanel, c(
         list(
@@ -508,18 +493,14 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
 
               if (mode == "single") {
                 # Single mode: store as character vector (could be empty string)
-                if (is.null(new_value) || length(new_value) == 0 || identical(new_value, "")) {
-                  selections[[local_schema]][[local_class]] <- character(0)
+                selections[[local_schema]][[local_class]] <- if (is.null(new_value) || length(new_value) == 0 || identical(new_value, "")) {
+                  character(0)
                 } else {
-                  selections[[local_schema]][[local_class]] <- new_value
+                  new_value
                 }
               } else {
                 # Multi mode: store as character vector (could be empty)
-                if (is.null(new_value) || length(new_value) == 0) {
-                  selections[[local_schema]][[local_class]] <- character(0)
-                } else {
-                  selections[[local_schema]][[local_class]] <- new_value
-                }
+                selections[[local_schema]][[local_class]] <- new_value %||% character(0)
               }
 
               # Optional: Show notification for feedback (safe check for vector)
@@ -665,11 +646,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       current_filter <- values$doc_filter
 
       # Check if in marked list
-      is_marked <- if (!is.null(marked_docs)) {
-        doc_id %in% marked_docs$ids
-      } else {
-        FALSE
-      }
+      is_marked <- doc_id %in% (marked_docs$ids %||% character(0))
 
       if (doc_id %in% classified_docs && current_filter == "unclassified") {
         target_filter <- "classified"
@@ -713,13 +690,12 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
 
     # Handle pending search after filter change
     shiny::observe({
-      if (!is.null(values$pending_search) && values$pending_search != "") {
-        search_id <- values$pending_search
-
-        if (search_id %in% values$filtered_doc_ids) {
-          found_index <- which(values$filtered_doc_ids == search_id)[1]
+      pending <- values$pending_search
+      if (!is.null(pending) && pending != "") {
+        if (pending %in% values$filtered_doc_ids) {
+          found_index <- which(values$filtered_doc_ids == pending)[1]
           values$current_index <- found_index
-          values$current_doc_id <- search_id
+          values$current_doc_id <- pending
           load_current_document()
 
           shiny::showNotification(

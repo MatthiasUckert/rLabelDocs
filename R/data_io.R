@@ -439,10 +439,10 @@ save_note <- function(.dir, .doc_id, .user_id, .note_text) {
   timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
 
   # Prepare note text (NULL if empty)
-  if (is.null(.note_text) || nchar(trimws(.note_text)) == 0) {
-    note_value <- NA_character_
+  note_value <- if (is.null(.note_text) || nchar(trimws(.note_text)) == 0) {
+    NA_character_
   } else {
-    note_value <- .note_text
+    .note_text
   }
 
   # Insert note record
@@ -532,7 +532,7 @@ read_all_notes <- function(.dir) {
   return(result)
 }
 
-# ===== PROGRESS STATS (helper for overview) =====
+# ===== PROGRESS STATS =====
 
 #' Get Overall Progress Statistics
 #'
@@ -540,7 +540,7 @@ read_all_notes <- function(.dir) {
 #'
 #' @param .dir Path to project directory
 #' @return List with progress statistics
-#' @keywords internal
+#' @export
 get_progress_stats <- function(.dir) {
   total_docs <- get_document_count(.dir)
 
@@ -597,7 +597,231 @@ get_all_timestamps <- function(.dir) {
   as.POSIXct(result$timestamp, origin = "1970-01-01")
 }
 
-# ===== EXPORT FUNCTIONS (with timeline support) =====
+# ===== EXPORT FUNCTIONS =====
+
+#' Export Data Helper (Internal)
+#'
+#' Internal helper function to consolidate export logic.
+#'
+#' @param .dir Path to project directory
+#' @param .format Export format: "csv" or "parquet"
+#' @param .scope Export scope: "current" or "history"
+#' @param .content_type Content type: "both", "classifications", "notes"
+#' @param .max_timestamp Optional maximum timestamp to filter to (POSIXct)
+#' @return Path to exported file
+#' @keywords internal
+export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timestamp = NULL) {
+  # Create exports directory if it doesn't exist
+  exports_dir <- file.path(.dir, "exports")
+  if (!dir.exists(exports_dir)) {
+    dir.create(exports_dir, recursive = TRUE)
+  }
+
+  # Generate filename with timestamp
+  timestamp_str <- format(Sys.time(), "%Y%m%d_%H%M%S")
+  
+  filename_base <- if (!is.null(.max_timestamp)) {
+    time_suffix <- format(.max_timestamp, "%Y%m%d_%H%M%S")
+    if (.scope == "current") {
+      paste0(.content_type, "_current_as_of_", time_suffix, "_", timestamp_str)
+    } else {
+      paste0(.content_type, "_history_up_to_", time_suffix, "_", timestamp_str)
+    }
+  } else {
+    paste0(.content_type, "_", .scope, "_", timestamp_str)
+  }
+
+  # Get database connection
+  con <- get_db_connection(.dir)
+  on.exit(DBI::dbDisconnect(con))
+
+  # Fetch data based on scope and content type
+  if (.content_type == "classifications" || .content_type == "both") {
+    if (.scope == "current") {
+      # Get current state
+      query_class <- if (!is.null(.max_timestamp)) {
+        "
+        SELECT c.doc_id, c.user_id, c.timestamp, c.schema, c.class, c.value
+        FROM classification_log c
+        INNER JOIN (
+          SELECT doc_id, MAX(timestamp) as max_timestamp
+          FROM classification_log
+          WHERE timestamp <= ?
+          GROUP BY doc_id
+        ) latest ON c.doc_id = latest.doc_id AND c.timestamp = latest.max_timestamp
+        ORDER BY c.doc_id, c.schema, c.class
+        "
+      } else {
+        "
+        SELECT c.doc_id, c.user_id, c.timestamp, c.schema, c.class, c.value
+        FROM classification_log c
+        INNER JOIN (
+          SELECT doc_id, MAX(timestamp) as max_timestamp
+          FROM classification_log
+          GROUP BY doc_id
+        ) latest ON c.doc_id = latest.doc_id AND c.timestamp = latest.max_timestamp
+        ORDER BY c.doc_id, c.schema, c.class
+        "
+      }
+      
+      params <- if (!is.null(.max_timestamp)) {
+        list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
+      } else {
+        list()
+      }
+      
+      classifications <- DBI::dbGetQuery(con, query_class, params = params)
+    } else {
+      # Get full history
+      query_class <- if (!is.null(.max_timestamp)) {
+        "
+        SELECT doc_id, user_id, timestamp, schema, class, value, session_id
+        FROM classification_log
+        WHERE timestamp <= ?
+        ORDER BY timestamp, doc_id, schema, class
+        "
+      } else {
+        "
+        SELECT doc_id, user_id, timestamp, schema, class, value, session_id
+        FROM classification_log
+        ORDER BY timestamp, doc_id, schema, class
+        "
+      }
+      
+      params <- if (!is.null(.max_timestamp)) {
+        list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
+      } else {
+        list()
+      }
+      
+      classifications <- DBI::dbGetQuery(con, query_class, params = params)
+    }
+    
+    # Standardize column names
+    if (nrow(classifications) > 0) {
+      if (.scope == "current") {
+        names(classifications) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value")
+      } else {
+        names(classifications) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value", "SessionID")
+      }
+      classifications$Timestamp <- as.POSIXct(classifications$Timestamp, origin = "1970-01-01")
+    }
+  }
+
+  if (.content_type == "notes" || .content_type == "both") {
+    if (.scope == "current") {
+      # Get current notes
+      query_notes <- if (!is.null(.max_timestamp)) {
+        "
+        SELECT n.doc_id, n.user_id, n.timestamp, n.note_text
+        FROM note_log n
+        INNER JOIN (
+          SELECT doc_id, MAX(timestamp) as max_timestamp
+          FROM note_log
+          WHERE timestamp <= ?
+          GROUP BY doc_id
+        ) latest ON n.doc_id = latest.doc_id AND n.timestamp = latest.max_timestamp
+        WHERE n.note_text IS NOT NULL
+        ORDER BY n.doc_id
+        "
+      } else {
+        "
+        SELECT n.doc_id, n.user_id, n.timestamp, n.note_text
+        FROM note_log n
+        INNER JOIN (
+          SELECT doc_id, MAX(timestamp) as max_timestamp
+          FROM note_log
+          GROUP BY doc_id
+        ) latest ON n.doc_id = latest.doc_id AND n.timestamp = latest.max_timestamp
+        WHERE n.note_text IS NOT NULL
+        ORDER BY n.doc_id
+        "
+      }
+      
+      params <- if (!is.null(.max_timestamp)) {
+        list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
+      } else {
+        list()
+      }
+      
+      notes <- DBI::dbGetQuery(con, query_notes, params = params)
+    } else {
+      # Get full history
+      query_notes <- if (!is.null(.max_timestamp)) {
+        "
+        SELECT doc_id, user_id, timestamp, note_text, session_id
+        FROM note_log
+        WHERE timestamp <= ?
+        ORDER BY timestamp, doc_id
+        "
+      } else {
+        "
+        SELECT doc_id, user_id, timestamp, note_text, session_id
+        FROM note_log
+        ORDER BY timestamp, doc_id
+        "
+      }
+      
+      params <- if (!is.null(.max_timestamp)) {
+        list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
+      } else {
+        list()
+      }
+      
+      notes <- DBI::dbGetQuery(con, query_notes, params = params)
+    }
+    
+    # Standardize column names
+    if (nrow(notes) > 0) {
+      if (.scope == "current") {
+        names(notes) <- c("DocID", "UserID", "Timestamp", "NoteText")
+      } else {
+        names(notes) <- c("DocID", "UserID", "Timestamp", "NoteText", "SessionID")
+      }
+      notes$Timestamp <- as.POSIXct(notes$Timestamp, origin = "1970-01-01")
+    }
+  }
+
+  # Combine data based on content type
+  export_data <- if (.content_type == "both") {
+    # Combine classifications and notes
+    if (nrow(notes) > 0) {
+      notes_as_rows <- data.frame(
+        DocID = notes$DocID,
+        UserID = notes$UserID,
+        Timestamp = notes$Timestamp,
+        Schema = 999L,
+        Class = "DocumentNote",
+        Value = notes$NoteText,
+        stringsAsFactors = FALSE
+      )
+      
+      if (.scope == "history") {
+        notes_as_rows$SessionID <- notes$SessionID
+      }
+      
+      dplyr::bind_rows(classifications, notes_as_rows) %>%
+        dplyr::arrange(Timestamp, DocID)
+    } else {
+      classifications
+    }
+  } else if (.content_type == "classifications") {
+    classifications
+  } else {
+    notes
+  }
+
+  # Export based on format
+  if (.format == "csv") {
+    filepath <- file.path(exports_dir, paste0(filename_base, ".csv"))
+    readr::write_csv(export_data, filepath)
+  } else {
+    filepath <- file.path(exports_dir, paste0(filename_base, ".parquet"))
+    arrow::write_parquet(export_data, filepath)
+  }
+
+  return(filepath)
+}
 
 #' Export Current State
 #'
@@ -613,125 +837,8 @@ get_all_timestamps <- function(.dir) {
 export_current_state <- function(.dir, .format = c("csv", "parquet"),
                                  .include_notes = TRUE, .max_timestamp = NULL) {
   .format <- match.arg(.format)
-
-  # Create exports directory if it doesn't exist
-  exports_dir <- file.path(.dir, "exports")
-  if (!dir.exists(exports_dir)) {
-    dir.create(exports_dir, recursive = TRUE)
-  }
-
-  # Generate filename with timestamp
-  timestamp_str <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  filename_base <- if (!is.null(.max_timestamp)) {
-    paste0("current_state_as_of_", format(.max_timestamp, "%Y%m%d_%H%M%S"), "_", timestamp_str)
-  } else {
-    paste0("current_state_", timestamp_str)
-  }
-
-  # Get current classifications (with optional time filter)
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
-
-  if (!is.null(.max_timestamp)) {
-    # Get state as of specified timestamp
-    query <- "
-      SELECT c.doc_id, c.user_id, c.timestamp, c.schema, c.class, c.value
-      FROM classification_log c
-      INNER JOIN (
-        SELECT doc_id, MAX(timestamp) as max_timestamp
-        FROM classification_log
-        WHERE timestamp <= ?
-        GROUP BY doc_id
-      ) latest ON c.doc_id = latest.doc_id AND c.timestamp = latest.max_timestamp
-      ORDER BY c.doc_id, c.schema, c.class
-    "
-
-    result <- DBI::dbGetQuery(con, query, params = list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S")))
-
-    if (nrow(result) > 0) {
-      names(result) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value")
-      result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
-      classifications <- result
-    } else {
-      classifications <- data.frame(
-        DocID = character(),
-        UserID = character(),
-        Timestamp = as.POSIXct(character()),
-        Schema = integer(),
-        Class = character(),
-        Value = character(),
-        stringsAsFactors = FALSE
-      )
-    }
-  } else {
-    classifications <- read_all_classifications(.dir)
-  }
-
-  if (.include_notes && nrow(classifications) > 0) {
-    # Get notes (with optional time filter)
-    if (!is.null(.max_timestamp)) {
-      query_notes <- "
-        SELECT n.doc_id, n.user_id, n.timestamp, n.note_text
-        FROM note_log n
-        INNER JOIN (
-          SELECT doc_id, MAX(timestamp) as max_timestamp
-          FROM note_log
-          WHERE timestamp <= ?
-          GROUP BY doc_id
-        ) latest ON n.doc_id = latest.doc_id AND n.timestamp = latest.max_timestamp
-        WHERE n.note_text IS NOT NULL
-        ORDER BY n.doc_id
-      "
-
-      result_notes <- DBI::dbGetQuery(con, query_notes, params = list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S")))
-
-      if (nrow(result_notes) > 0) {
-        names(result_notes) <- c("DocID", "UserID", "Timestamp", "NoteText")
-        result_notes$Timestamp <- as.POSIXct(result_notes$Timestamp, origin = "1970-01-01")
-        notes <- result_notes
-      } else {
-        notes <- data.frame(
-          DocID = character(),
-          UserID = character(),
-          Timestamp = as.POSIXct(character()),
-          NoteText = character(),
-          stringsAsFactors = FALSE
-        )
-      }
-    } else {
-      notes <- read_all_notes(.dir)
-    }
-
-    if (nrow(notes) > 0) {
-      # Merge classifications with notes
-      notes_as_rows <- data.frame(
-        DocID = notes$DocID,
-        UserID = notes$UserID,
-        Timestamp = notes$Timestamp,
-        Schema = 999L,
-        Class = "DocumentNote",
-        Value = notes$NoteText,
-        stringsAsFactors = FALSE
-      )
-
-      export_data <- dplyr::bind_rows(classifications, notes_as_rows)
-    } else {
-      export_data <- classifications
-    }
-  } else {
-    export_data <- classifications
-  }
-
-  # Export based on format
-  if (.format == "csv") {
-    filepath <- file.path(exports_dir, paste0(filename_base, ".csv"))
-    readr::write_csv(export_data, filepath)
-  } else {
-    filepath <- file.path(exports_dir, paste0(filename_base, ".parquet"))
-    arrow::write_parquet(export_data, filepath)
-  }
-
-  return(filepath)
+  content_type <- if (.include_notes) "both" else "classifications"
+  export_data_helper(.dir, .format, "current", content_type, .max_timestamp)
 }
 
 #' Export Full History
@@ -748,102 +855,8 @@ export_current_state <- function(.dir, .format = c("csv", "parquet"),
 export_full_history <- function(.dir, .format = c("csv", "parquet"),
                                 .include_notes = TRUE, .max_timestamp = NULL) {
   .format <- match.arg(.format)
-
-  # Create exports directory if it doesn't exist
-  exports_dir <- file.path(.dir, "exports")
-  if (!dir.exists(exports_dir)) {
-    dir.create(exports_dir, recursive = TRUE)
-  }
-
-  # Generate filename with timestamp
-  timestamp_str <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  filename_base <- if (!is.null(.max_timestamp)) {
-    paste0("full_history_up_to_", format(.max_timestamp, "%Y%m%d_%H%M%S"), "_", timestamp_str)
-  } else {
-    paste0("full_history_", timestamp_str)
-  }
-
-  # Get all classification history from SQLite
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
-
-  # Get all classification records (with optional time filter)
-  if (!is.null(.max_timestamp)) {
-    query_class <- "
-      SELECT doc_id, user_id, timestamp, schema, class, value, session_id
-      FROM classification_log
-      WHERE timestamp <= ?
-      ORDER BY timestamp, doc_id, schema, class
-    "
-    classifications <- DBI::dbGetQuery(con, query_class, params = list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S")))
-  } else {
-    query_class <- "
-      SELECT doc_id, user_id, timestamp, schema, class, value, session_id
-      FROM classification_log
-      ORDER BY timestamp, doc_id, schema, class
-    "
-    classifications <- DBI::dbGetQuery(con, query_class)
-  }
-
-  if (nrow(classifications) > 0) {
-    names(classifications) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value", "SessionID")
-    classifications$Timestamp <- as.POSIXct(classifications$Timestamp, origin = "1970-01-01")
-  }
-
-  if (.include_notes) {
-    # Get all note history (with optional time filter)
-    if (!is.null(.max_timestamp)) {
-      query_notes <- "
-        SELECT doc_id, user_id, timestamp, note_text, session_id
-        FROM note_log
-        WHERE timestamp <= ?
-        ORDER BY timestamp, doc_id
-      "
-      notes <- DBI::dbGetQuery(con, query_notes, params = list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S")))
-    } else {
-      query_notes <- "
-        SELECT doc_id, user_id, timestamp, note_text, session_id
-        FROM note_log
-        ORDER BY timestamp, doc_id
-      "
-      notes <- DBI::dbGetQuery(con, query_notes)
-    }
-
-    if (nrow(notes) > 0) {
-      names(notes) <- c("DocID", "UserID", "Timestamp", "NoteText", "SessionID")
-      notes$Timestamp <- as.POSIXct(notes$Timestamp, origin = "1970-01-01")
-
-      # Convert notes to same format as classifications
-      notes_as_rows <- data.frame(
-        DocID = notes$DocID,
-        UserID = notes$UserID,
-        Timestamp = notes$Timestamp,
-        Schema = 999L,
-        Class = "DocumentNote",
-        Value = notes$NoteText,
-        SessionID = notes$SessionID,
-        stringsAsFactors = FALSE
-      )
-
-      export_data <- dplyr::bind_rows(classifications, notes_as_rows) %>%
-        dplyr::arrange(Timestamp, DocID)
-    } else {
-      export_data <- classifications
-    }
-  } else {
-    export_data <- classifications
-  }
-
-  # Export based on format
-  if (.format == "csv") {
-    filepath <- file.path(exports_dir, paste0(filename_base, ".csv"))
-    readr::write_csv(export_data, filepath)
-  } else {
-    filepath <- file.path(exports_dir, paste0(filename_base, ".parquet"))
-    arrow::write_parquet(export_data, filepath)
-  }
-
-  return(filepath)
+  content_type <- if (.include_notes) "both" else "classifications"
+  export_data_helper(.dir, .format, "history", content_type, .max_timestamp)
 }
 
 #' Export Classifications Only
@@ -860,12 +873,7 @@ export_classifications <- function(.dir, .format = c("csv", "parquet"),
                                    .scope = c("current", "history"), .max_timestamp = NULL) {
   .format <- match.arg(.format)
   .scope <- match.arg(.scope)
-
-  if (.scope == "current") {
-    export_current_state(.dir, .format, .include_notes = FALSE, .max_timestamp = .max_timestamp)
-  } else {
-    export_full_history(.dir, .format, .include_notes = FALSE, .max_timestamp = .max_timestamp)
-  }
+  export_data_helper(.dir, .format, .scope, "classifications", .max_timestamp)
 }
 
 #' Export Notes Only
@@ -882,96 +890,7 @@ export_notes <- function(.dir, .format = c("csv", "parquet"),
                          .scope = c("current", "history"), .max_timestamp = NULL) {
   .format <- match.arg(.format)
   .scope <- match.arg(.scope)
-
-  # Create exports directory
-  exports_dir <- file.path(.dir, "exports")
-  if (!dir.exists(exports_dir)) {
-    dir.create(exports_dir, recursive = TRUE)
-  }
-
-  # Generate filename
-  timestamp_str <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  filename_base <- if (!is.null(.max_timestamp)) {
-    paste0("notes_", .scope, "_up_to_", format(.max_timestamp, "%Y%m%d_%H%M%S"), "_", timestamp_str)
-  } else {
-    paste0("notes_", .scope, "_", timestamp_str)
-  }
-
-  if (.scope == "current") {
-    if (!is.null(.max_timestamp)) {
-      # Get state as of timestamp
-      con <- get_db_connection(.dir)
-      on.exit(DBI::dbDisconnect(con))
-
-      query <- "
-        SELECT n.doc_id, n.user_id, n.timestamp, n.note_text
-        FROM note_log n
-        INNER JOIN (
-          SELECT doc_id, MAX(timestamp) as max_timestamp
-          FROM note_log
-          WHERE timestamp <= ?
-          GROUP BY doc_id
-        ) latest ON n.doc_id = latest.doc_id AND n.timestamp = latest.max_timestamp
-        WHERE n.note_text IS NOT NULL
-        ORDER BY n.doc_id
-      "
-
-      result <- DBI::dbGetQuery(con, query, params = list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S")))
-
-      if (nrow(result) > 0) {
-        names(result) <- c("DocID", "UserID", "Timestamp", "NoteText")
-        result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
-        notes <- result
-      } else {
-        notes <- data.frame(
-          DocID = character(),
-          UserID = character(),
-          Timestamp = as.POSIXct(character()),
-          NoteText = character(),
-          stringsAsFactors = FALSE
-        )
-      }
-    } else {
-      notes <- read_all_notes(.dir)
-    }
-  } else {
-    # Get full history
-    con <- get_db_connection(.dir)
-    on.exit(DBI::dbDisconnect(con))
-
-    if (!is.null(.max_timestamp)) {
-      query <- "
-        SELECT doc_id, user_id, timestamp, note_text, session_id
-        FROM note_log
-        WHERE timestamp <= ?
-        ORDER BY timestamp, doc_id
-      "
-      notes <- DBI::dbGetQuery(con, query, params = list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S")))
-    } else {
-      query <- "
-        SELECT doc_id, user_id, timestamp, note_text, session_id
-        FROM note_log
-        ORDER BY timestamp, doc_id
-      "
-      notes <- DBI::dbGetQuery(con, query)
-    }
-
-    if (nrow(notes) > 0) {
-      names(notes) <- c("DocID", "UserID", "Timestamp", "NoteText", "SessionID")
-      notes$Timestamp <- as.POSIXct(notes$Timestamp, origin = "1970-01-01")
-    }
-  }
-
-  # Export
-  if (.format == "csv") {
-    filepath <- file.path(exports_dir, paste0(filename_base, ".csv"))
-    readr::write_csv(notes, filepath)
-  } else {
-    filepath <- file.path(exports_dir, paste0(filename_base, ".parquet"))
-    arrow::write_parquet(notes, filepath)
-  }
-
-  return(filepath)
+  export_data_helper(.dir, .format, .scope, "notes", .max_timestamp)
 }
 
 #' List Exports

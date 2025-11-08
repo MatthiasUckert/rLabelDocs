@@ -4,7 +4,7 @@
 \alias{mod_overview_server}
 \title{Overview Module Server}
 \usage{
-mod_overview_server(id, .dir, schema)
+mod_overview_server(id, .dir, schema, marked_docs = NULL)
 }
 \arguments{
 \item{id}{Module namespace ID}
@@ -12,6 +12,8 @@ mod_overview_server(id, .dir, schema)
 \item{.dir}{Reactive or static path to project directory}
 
 \item{schema}{Reactive or static schema list}
+
+\item{marked_docs}{ReactiveValues object with marked document IDs}
 }
 \description{
 Server logic for the overview module.

@@ -13,19 +13,11 @@ save_classification(.dir, .doc_id, .user_id, .classifications_list)
 
 \item{.user_id}{User making the classification}
 
-\item{.classifications_list}{Nested list structure:
-list(
-"1" = list(
-DocClasses = c("Value1", "Value2"),
-Amendment = c("Amended")
-),
-"2" = list(...)
-)}
+\item{.classifications_list}{Nested list structure}
 }
 \value{
 Invisible NULL
 }
 \description{
-Saves classification values for a document in normalized format.
-Replaces any existing classifications for this document.
+Saves classification values for a document in SQLite append-only log.
 }

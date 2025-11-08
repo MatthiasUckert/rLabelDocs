@@ -12,7 +12,7 @@ read_single_document(.dir, .doc_id)
 \item{.doc_id}{Document ID to retrieve}
 }
 \value{
-Data frame with DocID and HTML columns, or empty data frame if not found
+Data frame with DocID and HTML columns
 }
 \description{
 Retrieves a single document by DocID using Arrow lazy loading.

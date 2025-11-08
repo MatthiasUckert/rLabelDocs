@@ -10,8 +10,8 @@ read_all_classifications(.dir)
 \item{.dir}{Path to project directory}
 }
 \value{
-Data frame with all classification records
+Data frame with all latest classification records
 }
 \description{
-Loads all classifications from the database.
+Loads the latest classifications for all documents from SQLite.
 }

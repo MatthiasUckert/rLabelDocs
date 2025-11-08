@@ -13,8 +13,7 @@ read_classification(.dir, .doc_id)
 }
 \value{
 Data frame with columns: DocID, UserID, Timestamp, Schema, Class, Value
-Returns empty data frame if no classifications exist
 }
 \description{
-Loads all classification values for a specific document.
+Loads the latest classification values for a specific document from SQLite.
 }

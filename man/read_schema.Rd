@@ -10,17 +10,7 @@ read_schema(.dir)
 \item{.dir}{Path to project directory}
 }
 \value{
-Nested list structure organized by schema ID:
-list(
-"1" = list(
-name = "Production",
-classes = list(
-DocClasses = c("Value1", "Value2"),
-Amendment = c("Amended", "Original")
-)
-),
-"2" = list(...)
-)
+Nested list structure organized by schema ID
 }
 \description{
 Reads and parses the classification schema from Excel or CSV format.

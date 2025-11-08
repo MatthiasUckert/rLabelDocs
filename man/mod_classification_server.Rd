@@ -4,7 +4,7 @@
 \alias{mod_classification_server}
 \title{Classification Module Server}
 \usage{
-mod_classification_server(id, .dir, .user_id, schema)
+mod_classification_server(id, .dir, .user_id, schema, marked_docs = NULL)
 }
 \arguments{
 \item{id}{Module namespace ID}
@@ -14,6 +14,8 @@ mod_classification_server(id, .dir, .user_id, schema)
 \item{.user_id}{Reactive or static user ID}
 
 \item{schema}{Reactive or static schema list}
+
+\item{marked_docs}{ReactiveValues object with marked document IDs}
 }
 \description{
 Server logic for the classification module.

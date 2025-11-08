@@ -23,6 +23,7 @@ Depends:
     R (>= 4.0.0)
 Imports: 
     arrow (>= 8.0.0),
+    DBI,
     digest,
     dplyr (>= 1.0.0),
     DT (>= 0.20),
@@ -30,6 +31,7 @@ Imports:
     magrittr,
     readr (>= 2.0.0),
     readxl,
+    RSQLite,
     shiny (>= 1.7.0)
 Suggests: 
     testthat (>= 3.0.0),

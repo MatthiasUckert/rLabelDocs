@@ -2,7 +2,7 @@
 % Please edit documentation in R/ui_helpers.R
 \name{generate_filter_choices}
 \alias{generate_filter_choices}
-\title{Generate Filter Dropdown Choices}
+\title{Generate Filter Dropdown Choices with Counts}
 \usage{
 generate_filter_choices(.dir)
 }
@@ -13,5 +13,5 @@ generate_filter_choices(.dir)
 Named character vector for selectInput choices
 }
 \description{
-Creates choices list for document filter dropdown with counts.
+Creates choices list for document filter dropdown with document counts.
 }

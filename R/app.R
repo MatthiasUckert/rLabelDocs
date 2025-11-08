@@ -90,26 +90,32 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
 
   # ===== SERVER =====
   server <- function(input, output, session) {
-    # Call classification module server
+    # Create shared reactiveValues for marked documents (session-based)
+    marked_docs <- shiny::reactiveValues(ids = character(0))
+
+    # Call classification module server with marked_docs
     mod_classification_server(
       "classification",
       .dir = .dir,
       .user_id = .user_id,
-      schema = schema
+      schema = schema,
+      marked_docs = marked_docs
     )
 
-    # Call overview module server
+    # Call overview module server with marked_docs
     mod_overview_server(
       "overview",
       .dir = .dir,
-      schema = schema
+      schema = schema,
+      marked_docs = marked_docs
     )
 
-    # Call browser module server
+    # Call browser module server with marked_docs
     mod_browser_server(
       "browser",
       .dir = .dir,
-      schema = schema
+      schema = schema,
+      marked_docs = marked_docs
     )
   }
 

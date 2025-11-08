@@ -14,36 +14,48 @@ mod_classification_ui <- function(id) {
   shiny::fluidPage(
     classification_css(),
     shiny::fluidRow(
+
       # ===== LEFT SIDEBAR (3 columns) =====
       shiny::column(
         3,
         shiny::div(
           class = "sidebar",
 
-          # --- Filter Panel (custom button group) ---
+          # --- Filter Panel (custom button group with 4 buttons now) ---
           shiny::div(
             class = "filter-panel",
             shiny::h5("Document Filter"),
             shiny::div(
-              style = "display: flex; gap: 5px;",
+              style = "display: grid; grid-template-columns: 1fr 1fr; gap: 5px;",
               shiny::actionButton(
                 ns("filter_all"),
                 "All Documents",
                 class = "filter-btn",
-                style = "flex: 1; background-color: #ffffff; border: 1px solid #ced4da;"
+                style = "background-color: #ffffff; border: 1px solid #ced4da;"
               ),
               shiny::actionButton(
                 ns("filter_classified"),
                 "Classified",
                 class = "filter-btn",
-                style = "flex: 1; background-color: #ffffff; border: 1px solid #ced4da;"
+                style = "background-color: #ffffff; border: 1px solid #ced4da;"
               ),
               shiny::actionButton(
                 ns("filter_unclassified"),
                 "Unclassified",
                 class = "filter-btn filter-btn-active",
-                style = "flex: 1; background-color: #007bff; color: white; border: 1px solid #007bff;"
+                style = "background-color: #007bff; color: white; border: 1px solid #007bff;"
+              ),
+              shiny::actionButton(
+                ns("filter_marked"),
+                "Marked",
+                class = "filter-btn",
+                style = "background-color: #ffffff; border: 1px solid #ced4da;"
               )
+            ),
+            # Marked count display
+            shiny::div(
+              style = "margin-top: 10px; text-align: center; font-size: 12px; color: #666;",
+              shiny::textOutput(ns("marked_count_display"))
             )
           ),
 
@@ -192,8 +204,9 @@ mod_classification_ui <- function(id) {
 #' @param .dir Reactive or static path to project directory
 #' @param .user_id Reactive or static user ID
 #' @param schema Reactive or static schema list
+#' @param marked_docs ReactiveValues object with marked document IDs
 #' @export
-mod_classification_server <- function(id, .dir, .user_id, schema) {
+mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
     # Make inputs reactive if they're not already
     dir_r <- if (shiny::is.reactive(.dir)) .dir else shiny::reactive(.dir)
@@ -211,6 +224,21 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       current_note = NULL
     )
 
+    # ===== MARKED COUNT DISPLAY =====
+    output$marked_count_display <- shiny::renderText({
+      if (is.null(marked_docs)) {
+        return("")
+      }
+      count <- length(marked_docs$ids)
+      if (count == 0) {
+        "No marked documents"
+      } else if (count == 1) {
+        "1 marked document"
+      } else {
+        paste(count, "marked documents")
+      }
+    })
+
     # ===== FILTER BUTTON HANDLERS =====
     shiny::observeEvent(input$filter_all, {
       values$doc_filter <- "all"
@@ -227,19 +255,30 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       update_filter_buttons("unclassified")
     })
 
+    shiny::observeEvent(input$filter_marked, {
+      if (is.null(marked_docs) || length(marked_docs$ids) == 0) {
+        shiny::showNotification(
+          "No documents marked. Mark documents in the Overview tab first.",
+          type = "warning",
+          duration = 3
+        )
+        return()
+      }
+      values$doc_filter <- "marked"
+      update_filter_buttons("marked")
+    })
+
     # Update button styling
     update_filter_buttons <- function(active) {
       # Reset all buttons
-      shiny::updateActionButton(session, "filter_all",
-        label = "All Documents",
-        icon = NULL
-      )
-      shiny::updateActionButton(session, "filter_classified",
-        label = "Classified",
-        icon = NULL
-      )
+      shiny::updateActionButton(session, "filter_all", label = "All Documents", icon = NULL)
+      shiny::updateActionButton(session, "filter_classified", label = "Classified", icon = NULL)
       shiny::updateActionButton(session, "filter_unclassified",
         label = "Unclassified",
+        icon = NULL
+      )
+      shiny::updateActionButton(session, "filter_marked",
+        label = "Marked",
         icon = NULL
       )
 
@@ -272,7 +311,14 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       switch(filter_type,
         "all" = get_docids(dir_r(), "All"),
         "unclassified" = get_docids(dir_r(), "Unclassified"),
-        "classified" = get_docids(dir_r(), "Classified")
+        "classified" = get_docids(dir_r(), "Classified"),
+        "marked" = {
+          if (!is.null(marked_docs)) {
+            marked_docs$ids
+          } else {
+            character(0)
+          }
+        }
       )
     })
 
@@ -307,7 +353,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
           }
         }
 
-        # Load note (NEW)
+        # Load note
         note_df <- read_note(dir_r(), values$current_doc_id)
         if (nrow(note_df) > 0) {
           values$current_note <- note_df
@@ -390,7 +436,6 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
         ""
       }
     })
-
 
     # ===== SCHEMA TABS UI (DYNAMIC) =====
     output$schema_tabs_ui <- shiny::renderUI({
@@ -495,50 +540,52 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
     shiny::observeEvent(input$save_btn, {
       current_selections <- shiny::reactiveValuesToList(selections)
 
-      tryCatch({
-        # Save classifications
-        save_classification(
-          dir_r(),
-          values$current_doc_id,
-          user_id_r(),
-          current_selections
-        )
-
-        # Save note (NEW)
-        note_text <- input$document_notes
-        save_note(
-          dir_r(),
-          values$current_doc_id,
-          user_id_r(),
-          note_text
-        )
-
-        # Update current note metadata
-        if (!is.null(note_text) && nchar(trimws(note_text)) > 0) {
-          values$current_note <- data.frame(
-            DocID = values$current_doc_id,
-            UserID = user_id_r(),
-            Timestamp = Sys.time(),
-            NoteText = note_text,
-            stringsAsFactors = FALSE
+      tryCatch(
+        {
+          # Save classifications
+          save_classification(
+            dir_r(),
+            values$current_doc_id,
+            user_id_r(),
+            current_selections
           )
-        } else {
-          values$current_note <- NULL
+
+          # Save note
+          note_text <- input$document_notes
+          save_note(
+            dir_r(),
+            values$current_doc_id,
+            user_id_r(),
+            note_text
+          )
+
+          # Update current note metadata
+          if (!is.null(note_text) && nchar(trimws(note_text)) > 0) {
+            values$current_note <- data.frame(
+              DocID = values$current_doc_id,
+              UserID = user_id_r(),
+              Timestamp = Sys.time(),
+              NoteText = note_text,
+              stringsAsFactors = FALSE
+            )
+          } else {
+            values$current_note <- NULL
+          }
+
+          shiny::showNotification(
+            "Classification and notes saved!",
+            type = "message",
+            duration = 2
+          )
+        },
+        error = function(e) {
+          shiny::showNotification(
+            paste("Error saving:", e$message),
+            type = "error",
+            duration = 5
+          )
         }
-
-        shiny::showNotification(
-          "Classification and notes saved!",
-          type = "message",
-          duration = 2
-        )
-
-      }, error = function(e) {
-        shiny::showNotification(
-          paste("Error saving:", e$message),
-          type = "error",
-          duration = 5
-        )
-      })
+      )
     })
 
     # ===== NAVIGATION BUTTONS =====
@@ -617,12 +664,22 @@ mod_classification_server <- function(id, .dir, .user_id, schema) {
       classified_docs <- get_docids(dir_r(), "Classified")
       current_filter <- values$doc_filter
 
+      # Check if in marked list
+      is_marked <- if (!is.null(marked_docs)) {
+        doc_id %in% marked_docs$ids
+      } else {
+        FALSE
+      }
+
       if (doc_id %in% classified_docs && current_filter == "unclassified") {
         target_filter <- "classified"
         message <- "Document is classified. Switch to 'Classified' filter?"
       } else if (!doc_id %in% classified_docs && current_filter == "classified") {
         target_filter <- "unclassified"
         message <- "Document is unclassified. Switch to 'Unclassified' filter?"
+      } else if (is_marked && current_filter != "marked") {
+        target_filter <- "marked"
+        message <- "Document is marked. Switch to 'Marked' filter?"
       } else {
         target_filter <- "all"
         message <- "Document exists. Switch to 'All Documents' filter?"

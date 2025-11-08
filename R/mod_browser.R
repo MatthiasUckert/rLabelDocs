@@ -48,7 +48,7 @@ mod_browser_ui <- function(id) {
             shiny::uiOutput(ns("value_filter_ui"))
           ),
 
-          # Notes Filter (NEW - ADD THIS)
+          # Notes Filter
           shiny::div(
             class = "filter-section",
             shiny::h5("Notes"),
@@ -93,6 +93,41 @@ mod_browser_ui <- function(id) {
           class = "document-list-panel",
           shiny::h4("Documents", style = "margin-top: 0;"),
 
+          # Marking controls
+          shiny::div(
+            style = "margin-bottom: 10px; padding: 10px; background-color: #e3f2fd; border-radius: 5px;",
+            shiny::div(
+              style = "display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;",
+              shiny::div(
+                style = "font-size: 13px; font-weight: 500; color: #1976d2;",
+                shiny::textOutput(ns("marked_count_text"), inline = TRUE)
+              ),
+              shiny::actionButton(
+                ns("clear_marks_browser"),
+                "Clear Marks",
+                icon = shiny::icon("times"),
+                class = "btn-secondary btn-sm"
+              )
+            ),
+            shiny::div(
+              style = "display: flex; gap: 5px;",
+              shiny::actionButton(
+                ns("mark_all_visible"),
+                "Mark All Visible",
+                icon = shiny::icon("check-square"),
+                class = "btn-info btn-sm",
+                style = "flex: 1;"
+              ),
+              shiny::actionButton(
+                ns("unmark_all_visible"),
+                "Unmark All Visible",
+                icon = shiny::icon("square"),
+                class = "btn-secondary btn-sm",
+                style = "flex: 1;"
+              )
+            )
+          ),
+
           # Search box
           shiny::textInput(
             ns("doc_search"),
@@ -101,7 +136,7 @@ mod_browser_ui <- function(id) {
             width = "100%"
           ),
 
-          # Document list
+          # Document list with checkboxes
           shiny::div(
             class = "doc-list-container",
             shiny::uiOutput(ns("document_list_ui"))
@@ -135,7 +170,7 @@ mod_browser_ui <- function(id) {
           shiny::h5("Classifications"),
           shiny::uiOutput(ns("document_classifications")),
 
-          # Document Notes (NEW - ADD THIS)
+          # Document Notes
           shiny::hr(),
           shiny::h5("Document Notes"),
           shiny::uiOutput(ns("document_notes_display"))
@@ -152,8 +187,9 @@ mod_browser_ui <- function(id) {
 #' @param id Module namespace ID
 #' @param .dir Reactive or static path to project directory
 #' @param schema Reactive or static schema list
+#' @param marked_docs ReactiveValues object with marked document IDs
 #' @export
-mod_browser_server <- function(id, .dir, schema) {
+mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
 
     # Make inputs reactive if they're not already
@@ -166,6 +202,21 @@ mod_browser_server <- function(id, .dir, schema) {
       selected_doc_id = NULL,
       filter_applied = FALSE
     )
+
+    # ===== MARKED COUNT DISPLAY =====
+    output$marked_count_text <- shiny::renderText({
+      if (is.null(marked_docs)) {
+        return("Marking disabled")
+      }
+      count <- length(marked_docs$ids)
+      if (count == 0) {
+        "No marked documents"
+      } else if (count == 1) {
+        "1 document marked"
+      } else {
+        paste(count, "documents marked")
+      }
+    })
 
     # ===== INITIALIZE WITH CLASSIFIED DOCUMENTS =====
     shiny::observe({
@@ -290,7 +341,7 @@ mod_browser_server <- function(id, .dir, schema) {
       if (nrow(filtered) > 0) {
         doc_ids <- unique(filtered$DocID)
 
-        # Apply notes filter (NEW)
+        # Apply notes filter
         if (!is.null(input$notes_filter) && input$notes_filter) {
           docs_with_notes <- get_docids_with_notes(dir_r())
           doc_ids <- doc_ids[doc_ids %in% docs_with_notes]
@@ -346,7 +397,7 @@ mod_browser_server <- function(id, .dir, schema) {
       has_filters <- (!is.null(input$schema_select) && input$schema_select != "") ||
         (!is.null(input$class_select) && input$class_select != "") ||
         (!is.null(input$value_select) && length(input$value_select) > 0) ||
-        (!is.null(input$notes_filter) && input$notes_filter)  # NEW
+        (!is.null(input$notes_filter) && input$notes_filter)
 
       sch <- schema_r()
 
@@ -373,7 +424,6 @@ mod_browser_server <- function(id, .dir, schema) {
           )
         }
 
-        # NEW
         if (!is.null(input$notes_filter) && input$notes_filter) {
           filter_text <- paste0(filter_text, "Notes: Only documents with notes\n")
         }
@@ -382,7 +432,67 @@ mod_browser_server <- function(id, .dir, schema) {
       filter_text
     })
 
+    # ===== MARKING FUNCTIONALITY =====
 
+    # Handle individual checkbox clicks
+    shiny::observeEvent(input$doc_checkbox, {
+      if (!is.null(marked_docs)) {
+        checkbox_info <- input$doc_checkbox
+        doc_id <- checkbox_info$id
+        is_checked <- checkbox_info$checked
+
+        if (is_checked) {
+          marked_docs$ids <- unique(c(marked_docs$ids, doc_id))
+        } else {
+          marked_docs$ids <- setdiff(marked_docs$ids, doc_id)
+        }
+      }
+    })
+
+    # Mark all visible documents
+    shiny::observeEvent(input$mark_all_visible, {
+      if (!is.null(marked_docs)) {
+        docs <- get_displayed_docs()
+        if (length(docs) > 0) {
+          marked_docs$ids <- unique(c(marked_docs$ids, docs))
+          shiny::showNotification(
+            paste("Marked", length(docs), "documents"),
+            type = "message",
+            duration = 2
+          )
+        }
+      }
+    })
+
+    # Unmark all visible documents
+    shiny::observeEvent(input$unmark_all_visible, {
+      if (!is.null(marked_docs)) {
+        docs <- get_displayed_docs()
+        if (length(docs) > 0) {
+          marked_docs$ids <- setdiff(marked_docs$ids, docs)
+          shiny::showNotification(
+            paste("Unmarked", length(docs), "documents"),
+            type = "message",
+            duration = 2
+          )
+        }
+      }
+    })
+
+    # Clear all marks
+    shiny::observeEvent(input$clear_marks_browser, {
+      if (!is.null(marked_docs)) {
+        count <- length(marked_docs$ids)
+        marked_docs$ids <- character(0)
+        shiny::showNotification(
+          paste("Cleared", count, "marks"),
+          type = "message",
+          duration = 2
+        )
+      }
+    })
+
+    # ===== DOCUMENT NOTES DISPLAY =====
     output$document_notes_display <- shiny::renderUI({
       if (is.null(values$selected_doc_id)) {
         return(shiny::div(
@@ -415,12 +525,7 @@ mod_browser_server <- function(id, .dir, schema) {
       )
     })
 
-
-
-
-
-
-    # ===== DOCUMENT LIST UI =====
+    # ===== DOCUMENT LIST UI WITH CHECKBOXES =====
     get_displayed_docs <- shiny::reactive({
       if (is.null(values$filtered_docs)) {
         return(character(0))
@@ -451,19 +556,48 @@ mod_browser_server <- function(id, .dir, schema) {
         ))
       }
 
-      # Create clickable document buttons
-      doc_buttons <- lapply(docs, function(doc_id) {
+      # Get marked status
+      marked_ids <- if (!is.null(marked_docs)) marked_docs$ids else character(0)
+
+      # Create document items with checkboxes
+      doc_items <- lapply(docs, function(doc_id) {
         is_selected <- identical(values$selected_doc_id, doc_id)
+        is_marked <- doc_id %in% marked_ids
 
         shiny::div(
           class = if (is_selected) "doc-item doc-item-selected" else "doc-item",
-          onclick = sprintf("Shiny.setInputValue('%s', '%s', {priority: 'event'})",
-                            session$ns("doc_clicked"), doc_id),
-          doc_id
+          style = "display: flex; align-items: center; gap: 10px;",
+
+          # Checkbox
+          if (!is.null(marked_docs)) {
+            shiny::tags$input(
+              type = "checkbox",
+              checked = if (is_marked) NA else NULL,
+              onclick = sprintf(
+                "Shiny.setInputValue('%s', {id: '%s', checked: this.checked}, {priority: 'event'})",
+                session$ns("doc_checkbox"),
+                doc_id
+              ),
+              style = "cursor: pointer; width: 16px; height: 16px; flex-shrink: 0;"
+            )
+          } else {
+            NULL
+          },
+
+          # Document ID (clickable)
+          shiny::div(
+            onclick = sprintf(
+              "Shiny.setInputValue('%s', '%s', {priority: 'event'})",
+              session$ns("doc_clicked"),
+              doc_id
+            ),
+            style = "flex: 1; cursor: pointer;",
+            doc_id
+          )
         )
       })
 
-      shiny::div(doc_buttons)
+      shiny::div(doc_items)
     })
 
     # Handle document selection
@@ -613,7 +747,7 @@ browser_css <- function() {
       }
 
       .doc-list-container {
-        height: 700px;
+        height: 600px;
         overflow-y: auto;
         margin-top: 15px;
         border: 1px solid #dee2e6;
@@ -624,7 +758,6 @@ browser_css <- function() {
       .doc-item {
         padding: 12px 15px;
         border-bottom: 1px solid #e9ecef;
-        cursor: pointer;
         transition: background-color 0.2s;
       }
 
@@ -636,6 +769,10 @@ browser_css <- function() {
         background-color: #2196f3 !important;
         color: white;
         font-weight: 500;
+      }
+
+      .doc-item-selected input[type='checkbox'] {
+        filter: brightness(0) invert(1);
       }
 
       .doc-item:last-child {

@@ -12,7 +12,7 @@ mod_overview_ui <- function(id) {
   ns <- shiny::NS(id)
 
   shiny::fluidPage(
-    overview_css(),
+    load_app_css(),
 
     # Refresh button at top
     shiny::fluidRow(
@@ -993,54 +993,4 @@ mod_overview_server <- function(id, .dir, schema, marked_docs = NULL) {
       show_exports_modal()
     })
   })
-}
-
-#' CSS for Overview Interface
-#'
-#' Returns CSS styling for overview components.
-#'
-#' @return HTML head tag with CSS
-#' @keywords internal
-overview_css <- function() {
-  shiny::tags$head(
-    shiny::tags$style(shiny::HTML("
-      /* Metric boxes */
-      .metric-box {
-        background: white;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        text-align: center;
-        margin-bottom: 20px;
-      }
-
-      .metric-box h3 {
-        font-size: 36px;
-        font-weight: bold;
-        color: #2c3e50;
-      }
-
-      .metric-total { border-left: 4px solid #3498db; }
-      .metric-classified { border-left: 4px solid #27ae60; }
-      .metric-remaining { border-left: 4px solid #e74c3c; }
-      .metric-percent { border-left: 4px solid #f39c12; }
-
-      /* Well panels */
-      .well {
-        background-color: white;
-        border: 1px solid #dee2e6;
-        border-radius: 8px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-      }
-
-      .well h4 {
-        margin-top: 0;
-        margin-bottom: 15px;
-        color: #2c3e50;
-        font-weight: 600;
-      }
-    "))
-  )
 }

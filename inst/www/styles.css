@@ -1,5 +1,6 @@
 /* ==========================================
    DOCUMENT CLASSIFICATION SYSTEM - STYLES
+   WORKING VERSION - RESTORES ORIGINAL LAYOUT
    ========================================== */
 
 /* ==========================================
@@ -173,9 +174,9 @@
   color: #2c3e50;
 }
 
-/* Document content viewer */
+/* Document content viewer - Classification tab uses this */
 .document-content {
-  height: 400px;
+  height: 600px;
   overflow-y: auto;
   padding: 20px;
   border: 1px solid #ddd;
@@ -242,6 +243,7 @@
   padding: 12px 15px;
   border-bottom: 1px solid #e9ecef;
   transition: background-color 0.2s;
+  cursor: pointer;
 }
 
 .doc-item:hover {
@@ -262,7 +264,7 @@
   border-bottom: none;
 }
 
-/* Document viewer */
+/* Document viewer - Browser tab uses this */
 .document-viewer {
   height: 600px;
   overflow-y: auto;

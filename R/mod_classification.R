@@ -182,7 +182,7 @@ mod_classification_ui <- function(id) {
 
           # Document content
           shiny::div(
-            class = "document-content",
+            class = "document-viewer",
             shiny::htmlOutput(ns("document_display"))
           ),
 

@@ -12,7 +12,7 @@ mod_browser_ui <- function(id) {
   ns <- shiny::NS(id)
 
   shiny::fluidPage(
-    browser_css(),
+    load_app_css(),
 
     shiny::fluidRow(
       # ===== LEFT SIDEBAR - FILTERS (3 columns) =====
@@ -702,116 +702,4 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
     })
 
   })
-}
-
-#' CSS for Browser Interface
-#'
-#' Returns CSS styling for browser components.
-#'
-#' @return HTML head tag with CSS
-#' @keywords internal
-browser_css <- function() {
-  shiny::tags$head(
-    shiny::tags$style(shiny::HTML("
-      /* Sidebar styling */
-      .sidebar {
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 5px;
-        height: 100%;
-      }
-
-      .filter-section {
-        margin-bottom: 20px;
-        padding-bottom: 15px;
-        border-bottom: 1px solid #dee2e6;
-      }
-
-      .filter-section:last-of-type {
-        border-bottom: none;
-      }
-
-      .filter-section h5 {
-        margin-bottom: 10px;
-        color: #2c3e50;
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      /* Document list panel */
-      .document-list-panel {
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 5px;
-        height: 100%;
-      }
-
-      .doc-list-container {
-        height: 600px;
-        overflow-y: auto;
-        margin-top: 15px;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        background: white;
-      }
-
-      .doc-item {
-        padding: 12px 15px;
-        border-bottom: 1px solid #e9ecef;
-        transition: background-color 0.2s;
-      }
-
-      .doc-item:hover {
-        background-color: #e3f2fd;
-      }
-
-      .doc-item-selected {
-        background-color: #2196f3 !important;
-        color: white;
-        font-weight: 500;
-      }
-
-      .doc-item-selected input[type='checkbox'] {
-        filter: brightness(0) invert(1);
-      }
-
-      .doc-item:last-child {
-        border-bottom: none;
-      }
-
-      /* Document viewer */
-      .document-viewer {
-        height: 600px;
-        overflow-y: auto;
-        padding: 20px;
-        border: 1px solid #ddd;
-        background: white;
-        border-radius: 5px;
-      }
-
-      .viewer-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-
-      /* Classification display */
-      .classification-display {
-        background-color: #f8f9fa;
-        padding: 15px;
-        border-radius: 5px;
-        margin-bottom: 15px;
-        border-left: 3px solid #3498db;
-      }
-
-      /* Well panels */
-      .well {
-        background-color: white;
-        border: 1px solid #dee2e6;
-        border-radius: 5px;
-        padding: 20px;
-        margin-bottom: 15px;
-      }
-    "))
-  )
 }

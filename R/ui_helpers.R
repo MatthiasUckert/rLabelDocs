@@ -201,6 +201,10 @@ format_selection_mode <- function(mode) {
   }
 }
 
+# UPDATED load_app_css() FUNCTION FOR R/ui_helpers.R
+#
+# Replace the existing load_app_css() function in your R/ui_helpers.R file
+# with this complete version that embeds CSS directly.
 
 #' Load Application CSS
 #'

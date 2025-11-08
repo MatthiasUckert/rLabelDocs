@@ -619,7 +619,7 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
 
   # Generate filename with timestamp
   timestamp_str <- format(Sys.time(), "%Y%m%d_%H%M%S")
-  
+
   filename_base <- if (!is.null(.max_timestamp)) {
     time_suffix <- format(.max_timestamp, "%Y%m%d_%H%M%S")
     if (.scope == "current") {
@@ -663,13 +663,13 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
         ORDER BY c.doc_id, c.schema, c.class
         "
       }
-      
+
       params <- if (!is.null(.max_timestamp)) {
         list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
       } else {
         list()
       }
-      
+
       classifications <- DBI::dbGetQuery(con, query_class, params = params)
     } else {
       # Get full history
@@ -687,16 +687,16 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
         ORDER BY timestamp, doc_id, schema, class
         "
       }
-      
+
       params <- if (!is.null(.max_timestamp)) {
         list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
       } else {
         list()
       }
-      
+
       classifications <- DBI::dbGetQuery(con, query_class, params = params)
     }
-    
+
     # Standardize column names
     if (nrow(classifications) > 0) {
       if (.scope == "current") {
@@ -737,13 +737,13 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
         ORDER BY n.doc_id
         "
       }
-      
+
       params <- if (!is.null(.max_timestamp)) {
         list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
       } else {
         list()
       }
-      
+
       notes <- DBI::dbGetQuery(con, query_notes, params = params)
     } else {
       # Get full history
@@ -761,16 +761,16 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
         ORDER BY timestamp, doc_id
         "
       }
-      
+
       params <- if (!is.null(.max_timestamp)) {
         list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
       } else {
         list()
       }
-      
+
       notes <- DBI::dbGetQuery(con, query_notes, params = params)
     }
-    
+
     # Standardize column names
     if (nrow(notes) > 0) {
       if (.scope == "current") {
@@ -795,11 +795,11 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
         Value = notes$NoteText,
         stringsAsFactors = FALSE
       )
-      
+
       if (.scope == "history") {
         notes_as_rows$SessionID <- notes$SessionID
       }
-      
+
       dplyr::bind_rows(classifications, notes_as_rows) %>%
         dplyr::arrange(Timestamp, DocID)
     } else {
@@ -886,8 +886,7 @@ export_classifications <- function(.dir, .format = c("csv", "parquet"),
 #' @param .max_timestamp Optional maximum timestamp to filter to (POSIXct)
 #' @return Path to exported file
 #' @export
-export_notes <- function(.dir, .format = c("csv", "parquet"),
-                         .scope = c("current", "history"), .max_timestamp = NULL) {
+export_notes <- function(.dir, .format = c("csv", "parquet"), .scope = c("current", "history"), .max_timestamp = NULL) {
   .format <- match.arg(.format)
   .scope <- match.arg(.scope)
   export_data_helper(.dir, .format, .scope, "notes", .max_timestamp)

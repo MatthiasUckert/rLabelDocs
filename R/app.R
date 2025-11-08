@@ -4,7 +4,7 @@
 #' Launch Classification App
 #'
 #' Main function to launch the document classification Shiny application.
-#' Includes three tabs: Classification, Overview, and Browser.
+#' Includes four tabs: Classification, Overview, Export Data, and Browser.
 #'
 #' @param .dir Path to project directory containing:
 #'   - Documents.parquet (required)
@@ -85,6 +85,13 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
       "Browser",
       icon = shiny::icon("search"),
       mod_browser_ui("browser")
+    ),
+
+    # Tab 3: Export Data (NEW)
+    shiny::tabPanel(
+      "Export Data",
+      icon = shiny::icon("download"),
+      mod_export_ui("export")
     )
   )
 
@@ -105,6 +112,14 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
     # Call overview module server with marked_docs
     mod_overview_server(
       "overview",
+      .dir = .dir,
+      schema = schema,
+      marked_docs = marked_docs
+    )
+
+    # Call export module server with marked_docs (NEW)
+    mod_export_server(
+      "export",
       .dir = .dir,
       schema = schema,
       marked_docs = marked_docs

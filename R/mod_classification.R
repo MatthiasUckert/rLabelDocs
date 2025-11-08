@@ -15,13 +15,13 @@ mod_classification_ui <- function(id) {
     load_app_css(),
     shiny::fluidRow(
 
-      # ===== LEFT SIDEBAR (3 columns) =====
+      # ===== LEFT SIDEBAR (3 columns)
       shiny::column(
         3,
         shiny::div(
           class = "sidebar",
 
-          # --- Filter Panel (custom button group with 4 buttons now) ---
+          # --- Filter Panel (custom button group with 4 buttons now)
           shiny::div(
             class = "filter-panel",
             shiny::h5("Document Filter"),
@@ -165,7 +165,7 @@ mod_classification_ui <- function(id) {
         )
       ),
 
-      # ===== RIGHT PANEL (9 columns) =====
+      # ===== RIGHT PANEL (9 columns)
       shiny::column(
         9,
         shiny::wellPanel(
@@ -213,7 +213,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
     user_id_r <- if (shiny::is.reactive(.user_id)) .user_id else shiny::reactive(.user_id)
     schema_r <- if (shiny::is.reactive(schema)) schema else shiny::reactive(schema)
 
-    # ===== STATE MANAGEMENT =====
+    # ===== STATE MANAGEMENT
     values <- shiny::reactiveValues(
       current_doc_id = NULL,
       current_doc = NULL,
@@ -224,7 +224,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       current_note = NULL
     )
 
-    # ===== MARKED COUNT DISPLAY =====
+    # ===== MARKED COUNT DISPLAY
     output$marked_count_display <- shiny::renderText({
       if (is.null(marked_docs)) {
         return("")
@@ -239,7 +239,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       }
     })
 
-    # ===== FILTER BUTTON HANDLERS =====
+    # ===== FILTER BUTTON HANDLERS
     shiny::observeEvent(input$filter_all, {
       values$doc_filter <- "all"
       update_filter_buttons("all")
@@ -302,7 +302,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       }
     })
 
-    # ===== GET FILTERED DOCUMENTS =====
+    # ===== GET FILTERED DOCUMENTS
     get_filtered_documents <- shiny::reactive({
       filter_type <- values$doc_filter
 
@@ -314,7 +314,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       )
     })
 
-    # ===== UPDATE DOCUMENT LIST WHEN FILTER CHANGES =====
+    # ===== UPDATE DOCUMENT LIST WHEN FILTER CHANGES
     shiny::observeEvent(get_filtered_documents(), {
       values$filtered_doc_ids <- get_filtered_documents()
       values$current_index <- 1
@@ -328,7 +328,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       }
     })
 
-    # ===== LOAD CURRENT DOCUMENT =====
+    # ===== LOAD CURRENT DOCUMENT
     load_current_document <- function() {
       if (!is.null(values$current_doc_id)) {
         # Load document content
@@ -365,12 +365,12 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       }
     }
 
-    # ===== DOCUMENT HEADER ID =====
+    # ===== DOCUMENT HEADER ID
     output$document_header_id <- shiny::renderText({
       values$current_doc_id %||% "No document selected"
     })
 
-    # ===== DOCUMENT INFO DISPLAY (SIMPLIFIED) =====
+    # ===== DOCUMENT INFO DISPLAY (SIMPLIFIED)
     output$doc_info <- shiny::renderText({
       format_document_info_simple(
         .current_index = values$current_index,
@@ -379,12 +379,12 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       )
     })
 
-    # ===== SELECTION MODE HELP TEXT =====
+    # ===== SELECTION MODE HELP TEXT
     output$selection_mode_help <- shiny::renderText({
       format_selection_mode(input$selection_mode)
     })
 
-    # ===== DOCUMENT DISPLAY =====
+    # ===== DOCUMENT DISPLAY
     output$document_display <- shiny::renderUI({
       if (is.null(values$current_doc) || nrow(values$current_doc) == 0) {
         shiny::tags$div(
@@ -397,7 +397,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       }
     })
 
-    # ===== DOCUMENT CLASSIFICATIONS DISPLAY =====
+    # ===== DOCUMENT CLASSIFICATIONS DISPLAY
     output$document_classifications <- shiny::renderUI({
       if (is.null(values$current_doc_id)) {
         return(shiny::div(
@@ -426,7 +426,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       }
     })
 
-    # ===== SCHEMA TABS UI (DYNAMIC) =====
+    # ===== SCHEMA TABS UI (DYNAMIC)
     output$schema_tabs_ui <- shiny::renderUI({
       sch <- schema_r()
       current_selections <- shiny::reactiveValuesToList(selections)
@@ -475,7 +475,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       ))
     })
 
-    # ===== HANDLE DROPDOWN CHANGES =====
+    # ===== HANDLE DROPDOWN CHANGES
     shiny::observe({
       sch <- schema_r()
       mode <- input$selection_mode
@@ -517,7 +517,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       }
     })
 
-    # ===== SAVE BUTTON =====
+    # ===== SAVE BUTTON
     shiny::observeEvent(input$save_btn, {
       current_selections <- shiny::reactiveValuesToList(selections)
 
@@ -569,7 +569,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       )
     })
 
-    # ===== NAVIGATION BUTTONS =====
+    # ===== NAVIGATION BUTTONS
     shiny::observeEvent(input$next_btn, {
       move_to_next()
     })
@@ -596,7 +596,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       }
     }
 
-    # ===== DOCUMENT SEARCH =====
+    # ===== DOCUMENT SEARCH
     shiny::observeEvent(input$search_btn, {
       perform_document_search()
     })

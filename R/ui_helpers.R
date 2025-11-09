@@ -148,13 +148,53 @@ generate_classification_display <- function(classification_nested, schema) {
   class_displays <- class_displays[!sapply(class_displays, is.null)]
 
   if (length(class_displays) == 0) {
-    return(shiny::div(
-      style = "color: #999; font-style: italic;",
-      "No classifications for this document"
-    ))
+    return(render_empty_state("No classifications for this document"))
   }
 
   shiny::tagList(class_displays)
+}
+
+#' Render Note Display
+#'
+#' Creates consistent read-only display of document notes with metadata.
+#'
+#' @param note_df Data frame with note data (DocID, UserID, Timestamp, NoteText)
+#' @param empty_message Message to show when no note exists
+#' @return Shiny UI element
+#' @export
+render_note_display <- function(note_df, empty_message = "No notes for this document") {
+  if (is.null(note_df) || nrow(note_df) == 0) {
+    return(render_empty_state(empty_message))
+  }
+
+  shiny::div(
+    class = "notes-display",
+    shiny::div(
+      style = "font-size: 11px; color: #666; margin-bottom: 10px;",
+      shiny::strong("Last edited by: "), note_df$UserID[1], " | ",
+      shiny::strong("Timestamp: "), format_timestamp(note_df$Timestamp[1], include_seconds = FALSE)
+    ),
+    shiny::div(
+      style = "background-color: #fffbea; padding: 15px; border-radius: 5px; border-left: 3px solid #f39c12; white-space: pre-wrap;",
+      note_df$NoteText[1]
+    )
+  )
+}
+
+#' Render Empty State
+#'
+#' Creates consistent empty state UI element.
+#'
+#' @param message Message to display
+#' @param icon Optional icon name (fontawesome)
+#' @return Shiny UI element
+#' @export
+render_empty_state <- function(message, icon = NULL) {
+  shiny::div(
+    style = "color: #999; font-style: italic; text-align: center; padding: 15px;",
+    if (!is.null(icon)) shiny::icon(icon),
+    message
+  )
 }
 
 #' Generate Filter Dropdown Choices with Counts
@@ -200,11 +240,6 @@ format_selection_mode <- function(mode) {
     "Multi-select mode: Choose multiple values per class"
   }
 }
-
-# UPDATED load_app_css() FUNCTION FOR R/ui_helpers.R
-#
-# Replace the existing load_app_css() function in your R/ui_helpers.R file
-# with this complete version that embeds CSS directly.
 
 #' Load Application CSS
 #'

@@ -186,41 +186,40 @@ get_document_count <- function(.dir) {
 #' @return Data frame with columns: DocID, UserID, Timestamp, Schema, Class, Value
 #' @export
 read_classification <- function(.dir, .doc_id) {
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
+  with_db_connection(.dir, function(con) {
+    # Get latest classifications for this document using dplyr
+    result <- con %>%
+      dplyr::tbl("classification_log") %>%
+      dplyr::filter(doc_id == .doc_id) %>%
+      dplyr::group_by(doc_id) %>%
+      dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+      dplyr::ungroup() %>%
+      dplyr::select(schema, class, value, user_id, timestamp) %>%
+      dplyr::arrange(schema, class, value) %>%
+      dplyr::collect()
 
-  # Get latest classifications for this document using dplyr
-  result <- con %>%
-    dplyr::tbl("classification_log") %>%
-    dplyr::filter(doc_id == .doc_id) %>%
-    dplyr::group_by(doc_id) %>%
-    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
-    dplyr::ungroup() %>%
-    dplyr::select(schema, class, value, user_id, timestamp) %>%
-    dplyr::arrange(schema, class, value) %>%
-    dplyr::collect()
+    if (nrow(result) == 0) {
+      return(data.frame(
+        DocID = character(),
+        UserID = character(),
+        Timestamp = as.POSIXct(character()),
+        Schema = integer(),
+        Class = character(),
+        Value = character(),
+        stringsAsFactors = FALSE
+      ))
+    }
 
-  if (nrow(result) == 0) {
-    return(data.frame(
-      DocID = character(),
-      UserID = character(),
-      Timestamp = as.POSIXct(character()),
-      Schema = integer(),
-      Class = character(),
-      Value = character(),
-      stringsAsFactors = FALSE
-    ))
-  }
+    # Add DocID column and standardize column names
+    result$DocID <- .doc_id
+    result <- result[, c("DocID", "user_id", "timestamp", "schema", "class", "value")]
+    names(result) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value")
 
-  # Add DocID column and standardize column names
-  result$DocID <- .doc_id
-  result <- result[, c("DocID", "user_id", "timestamp", "schema", "class", "value")]
-  names(result) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value")
+    # Convert timestamp to POSIXct
+    result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
 
-  # Convert timestamp to POSIXct
-  result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
-
-  return(result)
+    return(result)
+  })
 }
 
 #' Read All Classifications
@@ -231,38 +230,37 @@ read_classification <- function(.dir, .doc_id) {
 #' @return Data frame with all latest classification records
 #' @export
 read_all_classifications <- function(.dir) {
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
+  with_db_connection(.dir, function(con) {
+    # Get latest classifications for all documents using dplyr
+    result <- con %>%
+      dplyr::tbl("classification_log") %>%
+      dplyr::group_by(doc_id) %>%
+      dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+      dplyr::ungroup() %>%
+      dplyr::select(doc_id, user_id, timestamp, schema, class, value) %>%
+      dplyr::arrange(doc_id, schema, class) %>%
+      dplyr::collect()
 
-  # Get latest classifications for all documents using dplyr
-  result <- con %>%
-    dplyr::tbl("classification_log") %>%
-    dplyr::group_by(doc_id) %>%
-    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
-    dplyr::ungroup() %>%
-    dplyr::select(doc_id, user_id, timestamp, schema, class, value) %>%
-    dplyr::arrange(doc_id, schema, class) %>%
-    dplyr::collect()
+    if (nrow(result) == 0) {
+      return(data.frame(
+        DocID = character(),
+        UserID = character(),
+        Timestamp = as.POSIXct(character()),
+        Schema = integer(),
+        Class = character(),
+        Value = character(),
+        stringsAsFactors = FALSE
+      ))
+    }
 
-  if (nrow(result) == 0) {
-    return(data.frame(
-      DocID = character(),
-      UserID = character(),
-      Timestamp = as.POSIXct(character()),
-      Schema = integer(),
-      Class = character(),
-      Value = character(),
-      stringsAsFactors = FALSE
-    ))
-  }
+    # Standardize column names
+    names(result) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value")
 
-  # Standardize column names
-  names(result) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value")
+    # Convert timestamp to POSIXct
+    result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
 
-  # Convert timestamp to POSIXct
-  result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
-
-  return(result)
+    return(result)
+  })
 }
 
 #' Save Classification
@@ -276,50 +274,49 @@ read_all_classifications <- function(.dir) {
 #' @return Invisible NULL
 #' @export
 save_classification <- function(.dir, .doc_id, .user_id, .classifications_list) {
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
+  with_db_connection(.dir, function(con) {
+    # Generate session ID for this save operation
+    session_id <- generate_session_id()
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
 
-  # Generate session ID for this save operation
-  session_id <- generate_session_id()
-  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    # Build data frame with all classification values
+    records <- list()
 
-  # Build data frame with all classification values
-  records <- list()
+    for (schema_id in names(.classifications_list)) {
+      schema_classes <- .classifications_list[[schema_id]]
 
-  for (schema_id in names(.classifications_list)) {
-    schema_classes <- .classifications_list[[schema_id]]
+      for (class_name in names(schema_classes)) {
+        values <- schema_classes[[class_name]]
 
-    for (class_name in names(schema_classes)) {
-      values <- schema_classes[[class_name]]
+        # Skip if no values selected
+        if (length(values) == 0 || all(is.na(values)) || all(values == "")) {
+          next
+        }
 
-      # Skip if no values selected
-      if (length(values) == 0 || all(is.na(values)) || all(values == "")) {
-        next
-      }
-
-      # Create one row per value
-      for (value in values) {
-        records[[length(records) + 1]] <- data.frame(
-          doc_id = .doc_id,
-          user_id = .user_id,
-          timestamp = timestamp,
-          schema = as.integer(schema_id),
-          class = class_name,
-          value = value,
-          session_id = session_id,
-          stringsAsFactors = FALSE
-        )
+        # Create one row per value
+        for (value in values) {
+          records[[length(records) + 1]] <- data.frame(
+            doc_id = .doc_id,
+            user_id = .user_id,
+            timestamp = timestamp,
+            schema = as.integer(schema_id),
+            class = class_name,
+            value = value,
+            session_id = session_id,
+            stringsAsFactors = FALSE
+          )
+        }
       }
     }
-  }
 
-  # Insert records into database
-  if (length(records) > 0) {
-    records_df <- dplyr::bind_rows(records)
-    DBI::dbAppendTable(con, "classification_log", records_df)
-  }
+    # Insert records into database
+    if (length(records) > 0) {
+      records_df <- dplyr::bind_rows(records)
+      DBI::dbAppendTable(con, "classification_log", records_df)
+    }
 
-  invisible(NULL)
+    invisible(NULL)
+  })
 }
 
 #' Get All Document IDs
@@ -349,14 +346,13 @@ get_docids <- function(.dir, .type = c("All", "Classified", "Unclassified")) {
   }
 
   # Get classified document IDs from SQLite using dplyr
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
-
-  classified_ids <- con %>%
-    dplyr::tbl("classification_log") %>%
-    dplyr::distinct(doc_id) %>%
-    dplyr::collect() %>%
-    dplyr::pull(doc_id)
+  classified_ids <- with_db_connection(.dir, function(con) {
+    con %>%
+      dplyr::tbl("classification_log") %>%
+      dplyr::distinct(doc_id) %>%
+      dplyr::collect() %>%
+      dplyr::pull(doc_id)
+  })
 
   if (.type == "Classified") {
     return(all_ids[all_ids %in% classified_ids])
@@ -376,37 +372,36 @@ get_docids <- function(.dir, .type = c("All", "Classified", "Unclassified")) {
 #' @return Data frame with columns: DocID, UserID, Timestamp, NoteText
 #' @export
 read_note <- function(.dir, .doc_id) {
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
+  with_db_connection(.dir, function(con) {
+    # Get latest note for this document using dplyr
+    result <- con %>%
+      dplyr::tbl("note_log") %>%
+      dplyr::filter(doc_id == .doc_id) %>%
+      dplyr::collect() %>%
+      dplyr::arrange(dplyr::desc(timestamp)) %>%
+      dplyr::slice(1) %>%
+      dplyr::select(user_id, timestamp, note_text)
 
-  # Get latest note for this document using dplyr
-  result <- con %>%
-    dplyr::tbl("note_log") %>%
-    dplyr::filter(doc_id == .doc_id) %>%
-    dplyr::collect() %>%
-    dplyr::arrange(dplyr::desc(timestamp)) %>%
-    dplyr::slice(1) %>%
-    dplyr::select(user_id, timestamp, note_text)
+    if (nrow(result) == 0 || is.na(result$note_text[1])) {
+      return(data.frame(
+        DocID = character(),
+        UserID = character(),
+        Timestamp = as.POSIXct(character()),
+        NoteText = character(),
+        stringsAsFactors = FALSE
+      ))
+    }
 
-  if (nrow(result) == 0 || is.na(result$note_text[1])) {
-    return(data.frame(
-      DocID = character(),
-      UserID = character(),
-      Timestamp = as.POSIXct(character()),
-      NoteText = character(),
-      stringsAsFactors = FALSE
-    ))
-  }
+    # Add DocID and standardize column names
+    result$DocID <- .doc_id
+    result <- result[, c("DocID", "user_id", "timestamp", "note_text")]
+    names(result) <- c("DocID", "UserID", "Timestamp", "NoteText")
 
-  # Add DocID and standardize column names
-  result$DocID <- .doc_id
-  result <- result[, c("DocID", "user_id", "timestamp", "note_text")]
-  names(result) <- c("DocID", "UserID", "Timestamp", "NoteText")
+    # Convert timestamp to POSIXct
+    result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
 
-  # Convert timestamp to POSIXct
-  result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
-
-  return(result)
+    return(result)
+  })
 }
 
 #' Save Note for Document
@@ -421,33 +416,32 @@ read_note <- function(.dir, .doc_id) {
 #' @return Invisible NULL
 #' @export
 save_note <- function(.dir, .doc_id, .user_id, .note_text) {
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
+  with_db_connection(.dir, function(con) {
+    # Generate session ID
+    session_id <- generate_session_id()
+    timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
 
-  # Generate session ID
-  session_id <- generate_session_id()
-  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+    # Prepare note text (NULL if empty)
+    note_value <- if (is.null(.note_text) || nchar(trimws(.note_text)) == 0) {
+      NA_character_
+    } else {
+      .note_text
+    }
 
-  # Prepare note text (NULL if empty)
-  note_value <- if (is.null(.note_text) || nchar(trimws(.note_text)) == 0) {
-    NA_character_
-  } else {
-    .note_text
-  }
+    # Insert note record
+    note_record <- data.frame(
+      doc_id = .doc_id,
+      user_id = .user_id,
+      timestamp = timestamp,
+      note_text = note_value,
+      session_id = session_id,
+      stringsAsFactors = FALSE
+    )
 
-  # Insert note record
-  note_record <- data.frame(
-    doc_id = .doc_id,
-    user_id = .user_id,
-    timestamp = timestamp,
-    note_text = note_value,
-    session_id = session_id,
-    stringsAsFactors = FALSE
-  )
+    DBI::dbAppendTable(con, "note_log", note_record)
 
-  DBI::dbAppendTable(con, "note_log", note_record)
-
-  invisible(NULL)
+    invisible(NULL)
+  })
 }
 
 #' Get Document IDs with Notes
@@ -458,21 +452,20 @@ save_note <- function(.dir, .doc_id, .user_id, .note_text) {
 #' @return Character vector of document IDs
 #' @export
 get_docids_with_notes <- function(.dir) {
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
+  with_db_connection(.dir, function(con) {
+    # Get documents where latest note is not NULL using dplyr
+    result <- con %>%
+      dplyr::tbl("note_log") %>%
+      dplyr::group_by(doc_id) %>%
+      dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+      dplyr::ungroup() %>%
+      dplyr::filter(!is.na(note_text)) %>%
+      dplyr::distinct(doc_id) %>%
+      dplyr::collect() %>%
+      dplyr::pull(doc_id)
 
-  # Get documents where latest note is not NULL using dplyr
-  result <- con %>%
-    dplyr::tbl("note_log") %>%
-    dplyr::group_by(doc_id) %>%
-    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
-    dplyr::ungroup() %>%
-    dplyr::filter(!is.na(note_text)) %>%
-    dplyr::distinct(doc_id) %>%
-    dplyr::collect() %>%
-    dplyr::pull(doc_id)
-
-  return(result)
+    return(result)
+  })
 }
 
 #' Read All Notes
@@ -483,37 +476,36 @@ get_docids_with_notes <- function(.dir) {
 #' @return Data frame with all latest note records
 #' @export
 read_all_notes <- function(.dir) {
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
+  with_db_connection(.dir, function(con) {
+    # Get latest notes for all documents using dplyr
+    result <- con %>%
+      dplyr::tbl("note_log") %>%
+      dplyr::group_by(doc_id) %>%
+      dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+      dplyr::ungroup() %>%
+      dplyr::filter(!is.na(note_text)) %>%
+      dplyr::select(doc_id, user_id, timestamp, note_text) %>%
+      dplyr::arrange(doc_id) %>%
+      dplyr::collect()
 
-  # Get latest notes for all documents using dplyr
-  result <- con %>%
-    dplyr::tbl("note_log") %>%
-    dplyr::group_by(doc_id) %>%
-    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
-    dplyr::ungroup() %>%
-    dplyr::filter(!is.na(note_text)) %>%
-    dplyr::select(doc_id, user_id, timestamp, note_text) %>%
-    dplyr::arrange(doc_id) %>%
-    dplyr::collect()
+    if (nrow(result) == 0) {
+      return(data.frame(
+        DocID = character(),
+        UserID = character(),
+        Timestamp = as.POSIXct(character()),
+        NoteText = character(),
+        stringsAsFactors = FALSE
+      ))
+    }
 
-  if (nrow(result) == 0) {
-    return(data.frame(
-      DocID = character(),
-      UserID = character(),
-      Timestamp = as.POSIXct(character()),
-      NoteText = character(),
-      stringsAsFactors = FALSE
-    ))
-  }
+    # Standardize column names
+    names(result) <- c("DocID", "UserID", "Timestamp", "NoteText")
 
-  # Standardize column names
-  names(result) <- c("DocID", "UserID", "Timestamp", "NoteText")
+    # Convert timestamp to POSIXct
+    result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
 
-  # Convert timestamp to POSIXct
-  result$Timestamp <- as.POSIXct(result$Timestamp, origin = "1970-01-01")
-
-  return(result)
+    return(result)
+  })
 }
 
 # ===== PROGRESS STATS =====
@@ -537,16 +529,15 @@ get_progress_stats <- function(.dir) {
     ))
   }
 
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
-
-  # Count distinct classified documents using dplyr
-  classified_docs <- con %>%
-    dplyr::tbl("classification_log") %>%
-    dplyr::distinct(doc_id) %>%
-    dplyr::count() %>%
-    dplyr::collect() %>%
-    dplyr::pull(n)
+  classified_docs <- with_db_connection(.dir, function(con) {
+    # Count distinct classified documents using dplyr
+    con %>%
+      dplyr::tbl("classification_log") %>%
+      dplyr::distinct(doc_id) %>%
+      dplyr::count() %>%
+      dplyr::collect() %>%
+      dplyr::pull(n)
+  })
 
   list(
     total_documents = total_docs,
@@ -566,32 +557,31 @@ get_progress_stats <- function(.dir) {
 #' @return POSIXct vector of unique timestamps, sorted
 #' @export
 get_all_timestamps <- function(.dir) {
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
+  with_db_connection(.dir, function(con) {
+    # Get timestamps from classification_log
+    class_ts <- con %>%
+      dplyr::tbl("classification_log") %>%
+      dplyr::distinct(timestamp) %>%
+      dplyr::collect()
 
-  # Get timestamps from classification_log
-  class_ts <- con %>%
-    dplyr::tbl("classification_log") %>%
-    dplyr::distinct(timestamp) %>%
-    dplyr::collect()
+    # Get timestamps from note_log
+    note_ts <- con %>%
+      dplyr::tbl("note_log") %>%
+      dplyr::distinct(timestamp) %>%
+      dplyr::collect()
 
-  # Get timestamps from note_log
-  note_ts <- con %>%
-    dplyr::tbl("note_log") %>%
-    dplyr::distinct(timestamp) %>%
-    dplyr::collect()
+    # Combine and sort
+    all_ts <- dplyr::bind_rows(class_ts, note_ts) %>%
+      dplyr::distinct(timestamp) %>%
+      dplyr::arrange(timestamp) %>%
+      dplyr::pull(timestamp)
 
-  # Combine and sort
-  all_ts <- dplyr::bind_rows(class_ts, note_ts) %>%
-    dplyr::distinct(timestamp) %>%
-    dplyr::arrange(timestamp) %>%
-    dplyr::pull(timestamp)
+    if (length(all_ts) == 0) {
+      return(as.POSIXct(character()))
+    }
 
-  if (length(all_ts) == 0) {
-    return(as.POSIXct(character()))
-  }
-
-  as.POSIXct(all_ts, origin = "1970-01-01")
+    as.POSIXct(all_ts, origin = "1970-01-01")
+  })
 }
 
 # ===== HELPER FUNCTIONS FOR EXPORTS =====
@@ -747,75 +737,74 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
     paste0(.content_type, "_", .scope, "_", timestamp_str)
   }
 
-  # Get database connection
-  con <- get_db_connection(.dir)
-  on.exit(DBI::dbDisconnect(con))
-
-  # Fetch data based on scope and content type
-  if (.content_type == "classifications" || .content_type == "both") {
-    if (.scope == "current") {
-      classifications <- get_current_classifications(con, .max_timestamp)
-    } else {
-      classifications <- get_history_classifications(con, .max_timestamp)
-    }
-
-    # Standardize column names
-    if (nrow(classifications) > 0) {
+  # Use with_db_connection for all database operations
+  export_data <- with_db_connection(.dir, function(con) {
+    # Fetch data based on scope and content type
+    if (.content_type == "classifications" || .content_type == "both") {
       if (.scope == "current") {
-        names(classifications) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value")
+        classifications <- get_current_classifications(con, .max_timestamp)
       } else {
-        names(classifications) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value", "SessionID")
+        classifications <- get_history_classifications(con, .max_timestamp)
       }
-      classifications$Timestamp <- as.POSIXct(classifications$Timestamp, origin = "1970-01-01")
-    }
-  }
 
-  if (.content_type == "notes" || .content_type == "both") {
-    if (.scope == "current") {
-      notes <- get_current_notes(con, .max_timestamp)
-    } else {
-      notes <- get_history_notes(con, .max_timestamp)
+      # Standardize column names
+      if (nrow(classifications) > 0) {
+        if (.scope == "current") {
+          names(classifications) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value")
+        } else {
+          names(classifications) <- c("DocID", "UserID", "Timestamp", "Schema", "Class", "Value", "SessionID")
+        }
+        classifications$Timestamp <- as.POSIXct(classifications$Timestamp, origin = "1970-01-01")
+      }
     }
 
-    # Standardize column names
-    if (nrow(notes) > 0) {
+    if (.content_type == "notes" || .content_type == "both") {
       if (.scope == "current") {
-        names(notes) <- c("DocID", "UserID", "Timestamp", "NoteText")
+        notes <- get_current_notes(con, .max_timestamp)
       } else {
-        names(notes) <- c("DocID", "UserID", "Timestamp", "NoteText", "SessionID")
+        notes <- get_history_notes(con, .max_timestamp)
       }
-      notes$Timestamp <- as.POSIXct(notes$Timestamp, origin = "1970-01-01")
+
+      # Standardize column names
+      if (nrow(notes) > 0) {
+        if (.scope == "current") {
+          names(notes) <- c("DocID", "UserID", "Timestamp", "NoteText")
+        } else {
+          names(notes) <- c("DocID", "UserID", "Timestamp", "NoteText", "SessionID")
+        }
+        notes$Timestamp <- as.POSIXct(notes$Timestamp, origin = "1970-01-01")
+      }
     }
-  }
 
-  # Combine data based on content type
-  export_data <- if (.content_type == "both") {
-    # Combine classifications and notes
-    if (nrow(notes) > 0) {
-      notes_as_rows <- data.frame(
-        DocID = notes$DocID,
-        UserID = notes$UserID,
-        Timestamp = notes$Timestamp,
-        Schema = 999L,
-        Class = "DocumentNote",
-        Value = notes$NoteText,
-        stringsAsFactors = FALSE
-      )
+    # Combine data based on content type
+    if (.content_type == "both") {
+      # Combine classifications and notes
+      if (nrow(notes) > 0) {
+        notes_as_rows <- data.frame(
+          DocID = notes$DocID,
+          UserID = notes$UserID,
+          Timestamp = notes$Timestamp,
+          Schema = 999L,
+          Class = "DocumentNote",
+          Value = notes$NoteText,
+          stringsAsFactors = FALSE
+        )
 
-      if (.scope == "history") {
-        notes_as_rows$SessionID <- notes$SessionID
+        if (.scope == "history") {
+          notes_as_rows$SessionID <- notes$SessionID
+        }
+
+        dplyr::bind_rows(classifications, notes_as_rows) %>%
+          dplyr::arrange(Timestamp, DocID)
+      } else {
+        classifications
       }
-
-      dplyr::bind_rows(classifications, notes_as_rows) %>%
-        dplyr::arrange(Timestamp, DocID)
-    } else {
+    } else if (.content_type == "classifications") {
       classifications
+    } else {
+      notes
     }
-  } else if (.content_type == "classifications") {
-    classifications
-  } else {
-    notes
-  }
+  })
 
   # Export based on format
   if (.format == "csv") {

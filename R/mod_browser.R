@@ -495,34 +495,11 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
     # ===== DOCUMENT NOTES DISPLAY =====
     output$document_notes_display <- shiny::renderUI({
       if (is.null(values$selected_doc_id)) {
-        return(shiny::div(
-          style = "color: #999; font-style: italic;",
-          "Select a document to view notes"
-        ))
+        return(render_empty_state("Select a document to view notes"))
       }
 
       note_df <- read_note(dir_r(), values$selected_doc_id)
-
-      if (nrow(note_df) == 0) {
-        return(shiny::div(
-          style = "color: #999; font-style: italic;",
-          "No notes for this document"
-        ))
-      }
-
-      # Display note with metadata
-      shiny::div(
-        class = "notes-display",
-        shiny::div(
-          style = "font-size: 11px; color: #666; margin-bottom: 10px;",
-          shiny::strong("Last edited by: "), note_df$UserID[1], " | ",
-          shiny::strong("Timestamp: "), format(note_df$Timestamp[1], "%Y-%m-%d %H:%M")
-        ),
-        shiny::div(
-          style = "background-color: #fffbea; padding: 15px; border-radius: 5px; border-left: 3px solid #f39c12; white-space: pre-wrap;",
-          note_df$NoteText[1]
-        )
-      )
+      render_note_display(note_df, "No notes for this document")
     })
 
     # ===== DOCUMENT LIST UI WITH CHECKBOXES =====

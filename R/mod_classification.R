@@ -419,7 +419,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       if (!is.null(note) && nrow(note) > 0) {
         paste0(
           "Last edited by ", note$UserID[1],
-          " on ", format(note$Timestamp[1], "%Y-%m-%d %H:%M")
+          " on ", format_timestamp(note$Timestamp[1], include_seconds = FALSE)
         )
       } else {
         ""

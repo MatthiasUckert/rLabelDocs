@@ -54,6 +54,38 @@ generate_session_id <- function() {
   paste0(timestamp, "_", random_part)
 }
 
+#' Execute Function with Database Connection
+#'
+#' Wrapper that handles database connection lifecycle.
+#' Automatically opens connection, executes function, and closes connection.
+#'
+#' @param .dir Path to project directory
+#' @param .func Function to execute with connection (receives con as first arg)
+#' @return Result of .func
+#' @keywords internal
+with_db_connection <- function(.dir, .func) {
+  db_file <- file.path(.dir, "classification_data.db")
+  con <- DBI::dbConnect(RSQLite::SQLite(), db_file)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  .func(con)
+}
+
+#' Format Timestamp
+#'
+#' Consistent timestamp formatting across the application.
+#'
+#' @param timestamp POSIXct timestamp
+#' @param include_seconds Include seconds in output (default TRUE)
+#' @return Formatted string
+#' @export
+format_timestamp <- function(timestamp, include_seconds = TRUE) {
+  if (include_seconds) {
+    format(timestamp, "%Y-%m-%d %H:%M:%S")
+  } else {
+    format(timestamp, "%Y-%m-%d %H:%M")
+  }
+}
+
 #' Mark Documents
 #'
 #' Adds document IDs to the marked documents list.

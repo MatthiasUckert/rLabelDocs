@@ -272,7 +272,7 @@ mod_export_server <- function(id, .dir, schema, marked_docs = NULL) {
       if (is.null(timeline_state$selected_timestamp)) {
         "Showing current classifications"
       } else {
-        paste("Showing classifications as of", format(timeline_state$selected_timestamp, "%Y-%m-%d %H:%M:%S"))
+        paste("Showing classifications as of", format_timestamp(timeline_state$selected_timestamp))
       }
     })
 

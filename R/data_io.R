@@ -83,23 +83,20 @@ get_db_connection <- function(.dir) {
 
 #' Read Schema File
 #'
-#' Reads and parses the classification schema from Excel or CSV format.
+#' Reads and parses the classification schema from CSV format.
 #'
 #' @param .dir Path to project directory
 #' @return Nested list structure organized by schema ID
 #' @export
 read_schema <- function(.dir) {
-  # Try Excel first, then CSV
-  file_xlsx <- file.path(.dir, "Schema.xlsx")
+  # Read CSV schema file
   file_csv <- file.path(.dir, "Schema.csv")
 
-  if (file.exists(file_xlsx)) {
-    schema_df <- readxl::read_excel(file_xlsx)
-  } else if (file.exists(file_csv)) {
-    schema_df <- readr::read_csv(file_csv, show_col_types = FALSE)
-  } else {
-    stop("Schema file not found. Expected Schema.xlsx or Schema.csv in: ", .dir, call. = FALSE)
+  if (!file.exists(file_csv)) {
+    stop("Schema file not found. Expected Schema.csv in: ", .dir, call. = FALSE)
   }
+
+  schema_df <- readr::read_csv(file_csv, show_col_types = FALSE)
 
   # Validate required columns
   required_cols <- c("Schema", "Class", "Value")

@@ -4,12 +4,12 @@
 #' Launch Classification App
 #'
 #' Main function to launch the document classification Shiny application.
-#' Includes four tabs: Classification, Overview, Export Data, and Browser.
+#' Includes five tabs: Introduction, Classification, Overview, Browser, and Export Data.
 #'
 #' @param .dir Path to project directory containing:
-#'   - Documents.parquet (required)
-#'   - Schema.xlsx or Schema.csv (required)
-#'   - ClassificationDetails.parquet (created if missing)
+#'   - Documents.parquet (can be uploaded via Introduction tab)
+#'   - Schema.csv (can be uploaded via Introduction tab)
+#'   - classification_data.db (created automatically)
 #' @param .user_id User identifier for audit trail
 #' @param .port Port number for Shiny server (default: random)
 #' @param .launch_browser Whether to launch browser automatically (default: TRUE)
@@ -36,29 +36,43 @@
 #' @export
 classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_browser = TRUE) {
 
-  # ===== VALIDATION =====
-  message("Validating project directory...")
-  validate_project_directory(.dir)
-  validate_user_id(.user_id)
-
-  # ===== SCHEMA CHANGE DETECTION =====
-  schema_check <- check_schema_changes(.dir)
-  if (schema_check$changed) {
-    warning(
-      "\n", schema_check$message,
-      "\nTo update the schema hash and suppress this warning, run:",
-      "\n  update_schema_hash('", .dir, "')",
-      call. = FALSE
-    )
+  # ===== DIRECTORY CHECK =====
+  if (!dir.exists(.dir)) {
+    message("Creating project directory: ", .dir)
+    dir.create(.dir, recursive = TRUE)
   }
 
-  # ===== LOAD SCHEMA =====
-  message("Loading schema...")
-  schema <- read_schema(.dir)
+  # ===== VALIDATION =====
+  message("Checking project setup...")
+  setup_status <- check_project_setup(.dir)
 
-  message("\nApp ready to launch!")
-  message("User: ", .user_id)
-  message("Schemas: ", paste(sapply(schema, function(x) x$name), collapse = ", "))
+  if (setup_status$is_ready) {
+    validate_project_directory(.dir)
+    validate_user_id(.user_id)
+
+    # ===== SCHEMA CHANGE DETECTION =====
+    schema_check <- check_schema_changes(.dir)
+    if (schema_check$changed) {
+      warning(
+        "\n", schema_check$message,
+        "\nTo update the schema hash and suppress this warning, run:",
+        "\n  update_schema_hash('", .dir, "')",
+        call. = FALSE
+      )
+    }
+
+    # ===== LOAD SCHEMA =====
+    message("Loading schema...")
+    schema <- read_schema(.dir)
+
+    message("\nApp ready to launch!")
+    message("User: ", .user_id)
+    message("Schemas: ", paste(sapply(schema, function(x) x$name), collapse = ", "))
+  } else {
+    message("\nProject setup incomplete. Please upload required files via the Introduction tab.")
+    schema <- NULL
+  }
+
   message("\n")
 
   # ===== UI =====
@@ -66,28 +80,35 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
     title = "Document Classification System",
     id = "main_nav",
 
-    # Tab 1: Classification
+    # Tab 1: Introduction/Setup (NEW - FIRST TAB)
+    shiny::tabPanel(
+      "Introduction",
+      icon = shiny::icon("home"),
+      mod_intro_ui("intro")
+    ),
+
+    # Tab 2: Classification
     shiny::tabPanel(
       "Classification",
       icon = shiny::icon("check-square"),
       mod_classification_ui("classification")
     ),
 
-    # Tab 2: Overview
+    # Tab 3: Overview
     shiny::tabPanel(
       "Overview",
       icon = shiny::icon("chart-bar"),
       mod_overview_ui("overview")
     ),
 
-    # Tab 3: Browser
+    # Tab 4: Browser
     shiny::tabPanel(
       "Browser",
       icon = shiny::icon("search"),
       mod_browser_ui("browser")
     ),
 
-    # Tab 3: Export Data (NEW)
+    # Tab 5: Export Data
     shiny::tabPanel(
       "Export Data",
       icon = shiny::icon("download"),
@@ -100,12 +121,34 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
     # Create shared reactiveValues for marked documents (session-based)
     marked_docs <- shiny::reactiveValues(ids = character(0))
 
+    # Reactive schema that updates when files are uploaded
+    schema_reactive <- shiny::reactive({
+      # Check if setup is complete
+      status <- check_project_setup(.dir)
+
+      if (status$is_ready) {
+        tryCatch({
+          read_schema(.dir)
+        }, error = function(e) {
+          NULL
+        })
+      } else {
+        NULL
+      }
+    })
+
+    # Call introduction module server
+    mod_intro_server(
+      "intro",
+      .dir = .dir
+    )
+
     # Call classification module server with marked_docs
     mod_classification_server(
       "classification",
       .dir = .dir,
       .user_id = .user_id,
-      schema = schema,
+      schema = schema_reactive,
       marked_docs = marked_docs
     )
 
@@ -113,15 +156,15 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
     mod_overview_server(
       "overview",
       .dir = .dir,
-      schema = schema,
+      schema = schema_reactive,
       marked_docs = marked_docs
     )
 
-    # Call export module server with marked_docs (NEW)
+    # Call export module server with marked_docs
     mod_export_server(
       "export",
       .dir = .dir,
-      schema = schema,
+      schema = schema_reactive,
       marked_docs = marked_docs
     )
 
@@ -129,7 +172,7 @@ classification_app <- function(.dir, .user_id = "user", .port = NULL, .launch_br
     mod_browser_server(
       "browser",
       .dir = .dir,
-      schema = schema,
+      schema = schema_reactive,
       marked_docs = marked_docs
     )
   }

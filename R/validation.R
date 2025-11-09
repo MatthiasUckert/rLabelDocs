@@ -20,13 +20,12 @@ validate_project_directory <- function(.dir) {
     stop("Directory does not exist: ", .dir, call. = FALSE)
   }
 
-  # Check for schema file (Excel or CSV)
-  file_xlsx <- file.path(.dir, "Schema.xlsx")
+  # Check for schema file (CSV only)
   file_csv <- file.path(.dir, "Schema.csv")
 
-  if (!file.exists(file_xlsx) && !file.exists(file_csv)) {
+  if (!file.exists(file_csv)) {
     stop(
-      "Schema file not found. Expected Schema.xlsx or Schema.csv in: ", .dir,
+      "Schema file not found. Expected Schema.csv in: ", .dir,
       call. = FALSE
     )
   }
@@ -219,15 +218,10 @@ validate_doc_id <- function(.dir, .doc_id) {
 check_schema_changes <- function(.dir) {
   hash_file <- file.path(.dir, ".schema_hash")
 
-  # Determine which schema file exists
-  file_xlsx <- file.path(.dir, "Schema.xlsx")
+  # Check for CSV schema file
   file_csv <- file.path(.dir, "Schema.csv")
 
-  if (file.exists(file_xlsx)) {
-    schema_file <- file_xlsx
-  } else if (file.exists(file_csv)) {
-    schema_file <- file_csv
-  } else {
+  if (!file.exists(file_csv)) {
     return(list(
       changed = FALSE,
       message = "No schema file found"
@@ -243,7 +237,7 @@ check_schema_changes <- function(.dir) {
     ))
   }
 
-  current_hash <- digest::digest(file = schema_file, algo = "md5")
+  current_hash <- digest::digest(file = file_csv, algo = "md5")
 
   # First run - create hash file
   if (!file.exists(hash_file)) {
@@ -301,15 +295,10 @@ check_schema_changes <- function(.dir) {
 update_schema_hash <- function(.dir) {
   hash_file <- file.path(.dir, ".schema_hash")
 
-  # Determine which schema file exists
-  file_xlsx <- file.path(.dir, "Schema.xlsx")
+  # Check for CSV schema file
   file_csv <- file.path(.dir, "Schema.csv")
 
-  if (file.exists(file_xlsx)) {
-    schema_file <- file_xlsx
-  } else if (file.exists(file_csv)) {
-    schema_file <- file_csv
-  } else {
+  if (!file.exists(file_csv)) {
     return(invisible(NULL))
   }
 
@@ -317,11 +306,33 @@ update_schema_hash <- function(.dir) {
     return(invisible(NULL))
   }
 
-  current_hash <- digest::digest(file = schema_file, algo = "md5")
+  current_hash <- digest::digest(file = file_csv, algo = "md5")
   writeLines(
     c(current_hash, as.character(Sys.time())),
     hash_file
   )
 
   invisible(NULL)
+}
+
+#' Check Project Setup
+#'
+#' Checks if project has required files (Documents.parquet and Schema.csv).
+#' Used by Introduction module to determine if setup is needed.
+#'
+#' @param .dir Path to project directory
+#' @return List with:
+#'   - has_documents: logical
+#'   - has_schema: logical
+#'   - is_ready: logical (both files exist)
+#' @export
+check_project_setup <- function(.dir) {
+  has_documents <- file.exists(file.path(.dir, "Documents.parquet"))
+  has_schema <- file.exists(file.path(.dir, "Schema.csv"))
+
+  list(
+    has_documents = has_documents,
+    has_schema = has_schema,
+    is_ready = has_documents && has_schema
+  )
 }

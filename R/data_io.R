@@ -1,9 +1,6 @@
-# DATA I/O FUNCTIONS - SQLite Implementation
-# This file handles all data reading and writing operations using SQLite:
-# - Schema files (Excel/CSV) - unchanged
-# - Documents (Parquet) - unchanged
-# - Classifications (SQLite append-only log)
-# - Notes (SQLite append-only log)
+# DATA I/O FUNCTIONS - SQLite Implementation (REFACTORED)
+# This file handles all data reading and writing operations using SQLite
+# with dplyr/pipe syntax instead of raw SQL queries
 
 #' Initialize SQLite Database
 #'
@@ -192,20 +189,16 @@ read_classification <- function(.dir, .doc_id) {
   con <- get_db_connection(.dir)
   on.exit(DBI::dbDisconnect(con))
 
-  # Get latest timestamp for this document
-  query <- "
-    SELECT schema, class, value, user_id, timestamp
-    FROM classification_log
-    WHERE doc_id = ?
-      AND timestamp = (
-        SELECT MAX(timestamp)
-        FROM classification_log
-        WHERE doc_id = ?
-      )
-    ORDER BY schema, class, value
-  "
-
-  result <- DBI::dbGetQuery(con, query, params = list(.doc_id, .doc_id))
+  # Get latest classifications for this document using dplyr
+  result <- con %>%
+    dplyr::tbl("classification_log") %>%
+    dplyr::filter(doc_id == .doc_id) %>%
+    dplyr::group_by(doc_id) %>%
+    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(schema, class, value, user_id, timestamp) %>%
+    dplyr::arrange(schema, class, value) %>%
+    dplyr::collect()
 
   if (nrow(result) == 0) {
     return(data.frame(
@@ -241,19 +234,15 @@ read_all_classifications <- function(.dir) {
   con <- get_db_connection(.dir)
   on.exit(DBI::dbDisconnect(con))
 
-  # Get latest classifications for all documents
-  query <- "
-    SELECT c.doc_id, c.user_id, c.timestamp, c.schema, c.class, c.value
-    FROM classification_log c
-    INNER JOIN (
-      SELECT doc_id, MAX(timestamp) as max_timestamp
-      FROM classification_log
-      GROUP BY doc_id
-    ) latest ON c.doc_id = latest.doc_id AND c.timestamp = latest.max_timestamp
-    ORDER BY c.doc_id, c.schema, c.class
-  "
-
-  result <- DBI::dbGetQuery(con, query)
+  # Get latest classifications for all documents using dplyr
+  result <- con %>%
+    dplyr::tbl("classification_log") %>%
+    dplyr::group_by(doc_id) %>%
+    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(doc_id, user_id, timestamp, schema, class, value) %>%
+    dplyr::arrange(doc_id, schema, class) %>%
+    dplyr::collect()
 
   if (nrow(result) == 0) {
     return(data.frame(
@@ -359,12 +348,15 @@ get_docids <- function(.dir, .type = c("All", "Classified", "Unclassified")) {
     return(all_ids)
   }
 
-  # Get classified document IDs from SQLite
+  # Get classified document IDs from SQLite using dplyr
   con <- get_db_connection(.dir)
   on.exit(DBI::dbDisconnect(con))
 
-  query <- "SELECT DISTINCT doc_id FROM classification_log"
-  classified_ids <- DBI::dbGetQuery(con, query)$doc_id
+  classified_ids <- con %>%
+    dplyr::tbl("classification_log") %>%
+    dplyr::distinct(doc_id) %>%
+    dplyr::collect() %>%
+    dplyr::pull(doc_id)
 
   if (.type == "Classified") {
     return(all_ids[all_ids %in% classified_ids])
@@ -387,16 +379,14 @@ read_note <- function(.dir, .doc_id) {
   con <- get_db_connection(.dir)
   on.exit(DBI::dbDisconnect(con))
 
-  # Get latest note for this document
-  query <- "
-    SELECT user_id, timestamp, note_text
-    FROM note_log
-    WHERE doc_id = ?
-    ORDER BY timestamp DESC
-    LIMIT 1
-  "
-
-  result <- DBI::dbGetQuery(con, query, params = list(.doc_id))
+  # Get latest note for this document using dplyr
+  result <- con %>%
+    dplyr::tbl("note_log") %>%
+    dplyr::filter(doc_id == .doc_id) %>%
+    dplyr::collect() %>%
+    dplyr::arrange(dplyr::desc(timestamp)) %>%
+    dplyr::slice(1) %>%
+    dplyr::select(user_id, timestamp, note_text)
 
   if (nrow(result) == 0 || is.na(result$note_text[1])) {
     return(data.frame(
@@ -471,20 +461,18 @@ get_docids_with_notes <- function(.dir) {
   con <- get_db_connection(.dir)
   on.exit(DBI::dbDisconnect(con))
 
-  # Get documents where latest note is not NULL
-  query <- "
-    SELECT DISTINCT n.doc_id
-    FROM note_log n
-    INNER JOIN (
-      SELECT doc_id, MAX(timestamp) as max_timestamp
-      FROM note_log
-      GROUP BY doc_id
-    ) latest ON n.doc_id = latest.doc_id AND n.timestamp = latest.max_timestamp
-    WHERE n.note_text IS NOT NULL
-  "
+  # Get documents where latest note is not NULL using dplyr
+  result <- con %>%
+    dplyr::tbl("note_log") %>%
+    dplyr::group_by(doc_id) %>%
+    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(!is.na(note_text)) %>%
+    dplyr::distinct(doc_id) %>%
+    dplyr::collect() %>%
+    dplyr::pull(doc_id)
 
-  result <- DBI::dbGetQuery(con, query)
-  return(result$doc_id)
+  return(result)
 }
 
 #' Read All Notes
@@ -498,20 +486,16 @@ read_all_notes <- function(.dir) {
   con <- get_db_connection(.dir)
   on.exit(DBI::dbDisconnect(con))
 
-  # Get latest notes for all documents
-  query <- "
-    SELECT n.doc_id, n.user_id, n.timestamp, n.note_text
-    FROM note_log n
-    INNER JOIN (
-      SELECT doc_id, MAX(timestamp) as max_timestamp
-      FROM note_log
-      GROUP BY doc_id
-    ) latest ON n.doc_id = latest.doc_id AND n.timestamp = latest.max_timestamp
-    WHERE n.note_text IS NOT NULL
-    ORDER BY n.doc_id
-  "
-
-  result <- DBI::dbGetQuery(con, query)
+  # Get latest notes for all documents using dplyr
+  result <- con %>%
+    dplyr::tbl("note_log") %>%
+    dplyr::group_by(doc_id) %>%
+    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(!is.na(note_text)) %>%
+    dplyr::select(doc_id, user_id, timestamp, note_text) %>%
+    dplyr::arrange(doc_id) %>%
+    dplyr::collect()
 
   if (nrow(result) == 0) {
     return(data.frame(
@@ -556,8 +540,13 @@ get_progress_stats <- function(.dir) {
   con <- get_db_connection(.dir)
   on.exit(DBI::dbDisconnect(con))
 
-  query <- "SELECT COUNT(DISTINCT doc_id) as count FROM classification_log"
-  classified_docs <- DBI::dbGetQuery(con, query)$count
+  # Count distinct classified documents using dplyr
+  classified_docs <- con %>%
+    dplyr::tbl("classification_log") %>%
+    dplyr::distinct(doc_id) %>%
+    dplyr::count() %>%
+    dplyr::collect() %>%
+    dplyr::pull(n)
 
   list(
     total_documents = total_docs,
@@ -580,21 +569,148 @@ get_all_timestamps <- function(.dir) {
   con <- get_db_connection(.dir)
   on.exit(DBI::dbDisconnect(con))
 
-  # Get timestamps from both tables
-  query <- "
-    SELECT DISTINCT timestamp FROM classification_log
-    UNION
-    SELECT DISTINCT timestamp FROM note_log
-    ORDER BY timestamp
-  "
+  # Get timestamps from classification_log
+  class_ts <- con %>%
+    dplyr::tbl("classification_log") %>%
+    dplyr::distinct(timestamp) %>%
+    dplyr::collect()
 
-  result <- DBI::dbGetQuery(con, query)
+  # Get timestamps from note_log
+  note_ts <- con %>%
+    dplyr::tbl("note_log") %>%
+    dplyr::distinct(timestamp) %>%
+    dplyr::collect()
 
-  if (nrow(result) == 0) {
+  # Combine and sort
+  all_ts <- dplyr::bind_rows(class_ts, note_ts) %>%
+    dplyr::distinct(timestamp) %>%
+    dplyr::arrange(timestamp) %>%
+    dplyr::pull(timestamp)
+
+  if (length(all_ts) == 0) {
     return(as.POSIXct(character()))
   }
 
-  as.POSIXct(result$timestamp, origin = "1970-01-01")
+  as.POSIXct(all_ts, origin = "1970-01-01")
+}
+
+# ===== HELPER FUNCTIONS FOR EXPORTS =====
+
+#' Get Current State Classifications
+#'
+#' Internal helper to get latest classifications, optionally up to a timestamp.
+#'
+#' @param con Database connection
+#' @param .max_timestamp Optional maximum timestamp (POSIXct)
+#' @return Data frame of classifications
+#' @keywords internal
+get_current_classifications <- function(con, .max_timestamp = NULL) {
+  query <- con %>%
+    dplyr::tbl("classification_log")
+
+  # Apply timestamp filter if provided
+  if (!is.null(.max_timestamp)) {
+    max_ts_str <- format(.max_timestamp, "%Y-%m-%d %H:%M:%S")
+    query <- query %>%
+      dplyr::filter(timestamp <= max_ts_str)
+  }
+
+  # Get latest for each document
+  result <- query %>%
+    dplyr::group_by(doc_id) %>%
+    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::select(doc_id, user_id, timestamp, schema, class, value) %>%
+    dplyr::arrange(doc_id, schema, class) %>%
+    dplyr::collect()
+
+  return(result)
+}
+
+#' Get History Classifications
+#'
+#' Internal helper to get all classification history, optionally up to a timestamp.
+#'
+#' @param con Database connection
+#' @param .max_timestamp Optional maximum timestamp (POSIXct)
+#' @return Data frame of all classifications
+#' @keywords internal
+get_history_classifications <- function(con, .max_timestamp = NULL) {
+  query <- con %>%
+    dplyr::tbl("classification_log")
+
+  # Apply timestamp filter if provided
+  if (!is.null(.max_timestamp)) {
+    max_ts_str <- format(.max_timestamp, "%Y-%m-%d %H:%M:%S")
+    query <- query %>%
+      dplyr::filter(timestamp <= max_ts_str)
+  }
+
+  result <- query %>%
+    dplyr::select(doc_id, user_id, timestamp, schema, class, value, session_id) %>%
+    dplyr::arrange(timestamp, doc_id, schema, class) %>%
+    dplyr::collect()
+
+  return(result)
+}
+
+#' Get Current State Notes
+#'
+#' Internal helper to get latest notes, optionally up to a timestamp.
+#'
+#' @param con Database connection
+#' @param .max_timestamp Optional maximum timestamp (POSIXct)
+#' @return Data frame of notes
+#' @keywords internal
+get_current_notes <- function(con, .max_timestamp = NULL) {
+  query <- con %>%
+    dplyr::tbl("note_log")
+
+  # Apply timestamp filter if provided
+  if (!is.null(.max_timestamp)) {
+    max_ts_str <- format(.max_timestamp, "%Y-%m-%d %H:%M:%S")
+    query <- query %>%
+      dplyr::filter(timestamp <= max_ts_str)
+  }
+
+  # Get latest for each document
+  result <- query %>%
+    dplyr::group_by(doc_id) %>%
+    dplyr::filter(timestamp == max(timestamp, na.rm = TRUE)) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(!is.na(note_text)) %>%
+    dplyr::select(doc_id, user_id, timestamp, note_text) %>%
+    dplyr::arrange(doc_id) %>%
+    dplyr::collect()
+
+  return(result)
+}
+
+#' Get History Notes
+#'
+#' Internal helper to get all note history, optionally up to a timestamp.
+#'
+#' @param con Database connection
+#' @param .max_timestamp Optional maximum timestamp (POSIXct)
+#' @return Data frame of all notes
+#' @keywords internal
+get_history_notes <- function(con, .max_timestamp = NULL) {
+  query <- con %>%
+    dplyr::tbl("note_log")
+
+  # Apply timestamp filter if provided
+  if (!is.null(.max_timestamp)) {
+    max_ts_str <- format(.max_timestamp, "%Y-%m-%d %H:%M:%S")
+    query <- query %>%
+      dplyr::filter(timestamp <= max_ts_str)
+  }
+
+  result <- query %>%
+    dplyr::select(doc_id, user_id, timestamp, note_text, session_id) %>%
+    dplyr::arrange(timestamp, doc_id) %>%
+    dplyr::collect()
+
+  return(result)
 }
 
 # ===== EXPORT FUNCTIONS =====
@@ -638,63 +754,9 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
   # Fetch data based on scope and content type
   if (.content_type == "classifications" || .content_type == "both") {
     if (.scope == "current") {
-      # Get current state
-      query_class <- if (!is.null(.max_timestamp)) {
-        "
-        SELECT c.doc_id, c.user_id, c.timestamp, c.schema, c.class, c.value
-        FROM classification_log c
-        INNER JOIN (
-          SELECT doc_id, MAX(timestamp) as max_timestamp
-          FROM classification_log
-          WHERE timestamp <= ?
-          GROUP BY doc_id
-        ) latest ON c.doc_id = latest.doc_id AND c.timestamp = latest.max_timestamp
-        ORDER BY c.doc_id, c.schema, c.class
-        "
-      } else {
-        "
-        SELECT c.doc_id, c.user_id, c.timestamp, c.schema, c.class, c.value
-        FROM classification_log c
-        INNER JOIN (
-          SELECT doc_id, MAX(timestamp) as max_timestamp
-          FROM classification_log
-          GROUP BY doc_id
-        ) latest ON c.doc_id = latest.doc_id AND c.timestamp = latest.max_timestamp
-        ORDER BY c.doc_id, c.schema, c.class
-        "
-      }
-
-      params <- if (!is.null(.max_timestamp)) {
-        list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
-      } else {
-        list()
-      }
-
-      classifications <- DBI::dbGetQuery(con, query_class, params = params)
+      classifications <- get_current_classifications(con, .max_timestamp)
     } else {
-      # Get full history
-      query_class <- if (!is.null(.max_timestamp)) {
-        "
-        SELECT doc_id, user_id, timestamp, schema, class, value, session_id
-        FROM classification_log
-        WHERE timestamp <= ?
-        ORDER BY timestamp, doc_id, schema, class
-        "
-      } else {
-        "
-        SELECT doc_id, user_id, timestamp, schema, class, value, session_id
-        FROM classification_log
-        ORDER BY timestamp, doc_id, schema, class
-        "
-      }
-
-      params <- if (!is.null(.max_timestamp)) {
-        list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
-      } else {
-        list()
-      }
-
-      classifications <- DBI::dbGetQuery(con, query_class, params = params)
+      classifications <- get_history_classifications(con, .max_timestamp)
     }
 
     # Standardize column names
@@ -710,65 +772,9 @@ export_data_helper <- function(.dir, .format, .scope, .content_type, .max_timest
 
   if (.content_type == "notes" || .content_type == "both") {
     if (.scope == "current") {
-      # Get current notes
-      query_notes <- if (!is.null(.max_timestamp)) {
-        "
-        SELECT n.doc_id, n.user_id, n.timestamp, n.note_text
-        FROM note_log n
-        INNER JOIN (
-          SELECT doc_id, MAX(timestamp) as max_timestamp
-          FROM note_log
-          WHERE timestamp <= ?
-          GROUP BY doc_id
-        ) latest ON n.doc_id = latest.doc_id AND n.timestamp = latest.max_timestamp
-        WHERE n.note_text IS NOT NULL
-        ORDER BY n.doc_id
-        "
-      } else {
-        "
-        SELECT n.doc_id, n.user_id, n.timestamp, n.note_text
-        FROM note_log n
-        INNER JOIN (
-          SELECT doc_id, MAX(timestamp) as max_timestamp
-          FROM note_log
-          GROUP BY doc_id
-        ) latest ON n.doc_id = latest.doc_id AND n.timestamp = latest.max_timestamp
-        WHERE n.note_text IS NOT NULL
-        ORDER BY n.doc_id
-        "
-      }
-
-      params <- if (!is.null(.max_timestamp)) {
-        list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
-      } else {
-        list()
-      }
-
-      notes <- DBI::dbGetQuery(con, query_notes, params = params)
+      notes <- get_current_notes(con, .max_timestamp)
     } else {
-      # Get full history
-      query_notes <- if (!is.null(.max_timestamp)) {
-        "
-        SELECT doc_id, user_id, timestamp, note_text, session_id
-        FROM note_log
-        WHERE timestamp <= ?
-        ORDER BY timestamp, doc_id
-        "
-      } else {
-        "
-        SELECT doc_id, user_id, timestamp, note_text, session_id
-        FROM note_log
-        ORDER BY timestamp, doc_id
-        "
-      }
-
-      params <- if (!is.null(.max_timestamp)) {
-        list(format(.max_timestamp, "%Y-%m-%d %H:%M:%S"))
-      } else {
-        list()
-      }
-
-      notes <- DBI::dbGetQuery(con, query_notes, params = params)
+      notes <- get_history_notes(con, .max_timestamp)
     }
 
     # Standardize column names

@@ -284,39 +284,8 @@ mod_export_server <- function(id, .dir, schema, marked_docs = NULL) {
       con <- get_db_connection(dir_r())
       on.exit(DBI::dbDisconnect(con))
 
-      # Get latest classifications up to max_timestamp
-      if (is.null(max_ts)) {
-        # Current state
-        query <- "
-          SELECT c.doc_id, c.user_id, c.timestamp, c.schema, c.class, c.value
-          FROM classification_log c
-          INNER JOIN (
-            SELECT doc_id, MAX(timestamp) as max_timestamp
-            FROM classification_log
-            GROUP BY doc_id
-          ) latest ON c.doc_id = latest.doc_id AND c.timestamp = latest.max_timestamp
-          ORDER BY c.timestamp DESC, c.doc_id
-        "
-        result <- DBI::dbGetQuery(con, query)
-      } else {
-        # Historical state
-        query <- "
-          SELECT c.doc_id, c.user_id, c.timestamp, c.schema, c.class, c.value
-          FROM classification_log c
-          INNER JOIN (
-            SELECT doc_id, MAX(timestamp) as max_timestamp
-            FROM classification_log
-            WHERE timestamp <= ?
-            GROUP BY doc_id
-          ) latest ON c.doc_id = latest.doc_id AND c.timestamp = latest.max_timestamp
-          WHERE c.timestamp <= ?
-          ORDER BY c.timestamp DESC, c.doc_id
-        "
-        result <- DBI::dbGetQuery(con, query, params = list(
-          format(max_ts, "%Y-%m-%d %H:%M:%S"),
-          format(max_ts, "%Y-%m-%d %H:%M:%S")
-        ))
-      }
+      # Use the helper function from data_io.R
+      result <- get_current_classifications(con, .max_timestamp = max_ts)
 
       if (nrow(result) == 0) {
         return(data.frame(

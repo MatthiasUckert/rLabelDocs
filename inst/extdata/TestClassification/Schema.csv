@@ -1,4 +1,4 @@
-﻿Schema,Class,Value
+Schema,Class,Value
 1,DocClasses,PurchaseSales-Assets
 1,DocClasses,PurchaseSales-InventoryService
 1,DocClasses,Other
@@ -23,3 +23,5 @@
 2,DocClasses,Employment-Legal (Test)
 2,Amendment,Amended (Test)
 2,Amendment,Original (Test)
+3,DocClasses,Hi
+3,DocClasses,Na Du

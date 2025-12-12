@@ -2,12 +2,9 @@ library(tidyverse)
 devtools::load_all(".")
 
 dir_ <- "inst/extdata/TestClassification/"
-start_classification(dir_)
+start_classification(project_dir = dir_)
 
-#
-# "inst/extdata/TestClassification/ClassificationDetails.parquet" %>%
-#   arrow::read_parquet()
-
+arrow::open_dataset("inst/extdata/TestClassification/Documents.parquet")
 
 
 

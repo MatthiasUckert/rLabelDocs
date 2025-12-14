@@ -79,7 +79,7 @@ mod_intro_server <- function(id, .dir) {
 
     # Handle document upload
     shiny::observeEvent(input$upload_documents, {
-      req(input$upload_documents)
+      shiny::req(input$upload_documents)
 
       file_info <- input$upload_documents
       target_path <- file.path(dir_r(), "Documents.parquet")
@@ -116,7 +116,7 @@ mod_intro_server <- function(id, .dir) {
 
     # Handle schema upload
     shiny::observeEvent(input$upload_schema, {
-      req(input$upload_schema)
+      shiny::req(input$upload_schema)
 
       file_info <- input$upload_schema
       target_path <- file.path(dir_r(), "Schema.csv")
@@ -234,9 +234,9 @@ render_setup_interface <- function(ns, status, dir_path) {
                 shiny::div(
                   style = "background-color: #f8f9fa; padding: 15px; border-radius: 5px; text-align: left;",
                   shiny::strong("Required format:"), shiny::br(),
-                  "• Parquet file", shiny::br(),
-                  "• Columns: DocID, HTML", shiny::br(),
-                  "• No duplicate DocIDs"
+                  "- Parquet file", shiny::br(),
+                  "- Columns: DocID, HTML", shiny::br(),
+                  "- No duplicate DocIDs"
                 )
               )
             }
@@ -284,9 +284,9 @@ render_setup_interface <- function(ns, status, dir_path) {
                 shiny::div(
                   style = "background-color: #f8f9fa; padding: 15px; border-radius: 5px; text-align: left;",
                   shiny::strong("Required format:"), shiny::br(),
-                  "• CSV file", shiny::br(),
-                  "• Columns: Schema, SchemaName, Class, Value", shiny::br(),
-                  "• At least one schema defined"
+                  "- CSV file", shiny::br(),
+                  "- Columns: Schema, SchemaName, Class, Value", shiny::br(),
+                  "- At least one schema defined"
                 )
               )
             }

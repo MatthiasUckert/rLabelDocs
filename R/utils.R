@@ -15,7 +15,17 @@ NULL
 
 
 #' Null coalescing operator
+#'
+#' @name null-coalesce
+#' @rdname null-coalesce
 #' @keywords internal
+#' @param x First value
+#' @param y Fallback value if x is NULL
+#' @return x if not NULL, otherwise y
+NULL
+
+#' @rdname null-coalesce
+#' @export
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
 }
@@ -135,10 +145,13 @@ clear_all_marks <- function(marked_docs) {
 #' Suppress NSE warnings
 #' @keywords internal
 utils::globalVariables(c(
-  # Data I/O variables
+  # Data I/O variables - database columns
   "DocID", "HTML", "UserID", "Timestamp", "Schema", "Class", "Value",
   "SchemaName", ".", "everything", "where",
   "NoteText",
+  # Database column names (lowercase from SQLite)
+  "doc_id", "user_id", "timestamp", "schema", "class", "value",
+  "note_text", "session_id", "n",
   # Overview module variables
   "category", "count", "classifications", "ymax", "ymin", "Date", "documents",
   "fraction"

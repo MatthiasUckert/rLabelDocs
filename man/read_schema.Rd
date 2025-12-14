@@ -13,5 +13,5 @@ read_schema(.dir)
 Nested list structure organized by schema ID
 }
 \description{
-Reads and parses the classification schema from Excel or CSV format.
+Reads and parses the classification schema from CSV format.
 }

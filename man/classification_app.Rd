@@ -14,9 +14,9 @@ classification_app(
 \arguments{
 \item{.dir}{Path to project directory containing:
 \itemize{
-\item Documents.parquet (required)
-\item Schema.xlsx or Schema.csv (required)
-\item ClassificationDetails.parquet (created if missing)
+\item Documents.parquet (can be uploaded via Introduction tab)
+\item Schema.csv (can be uploaded via Introduction tab)
+\item classification_data.db (created automatically)
 }}
 
 \item{.user_id}{User identifier for audit trail}
@@ -30,7 +30,7 @@ Shiny app object
 }
 \description{
 Main function to launch the document classification Shiny application.
-Includes three tabs: Classification, Overview, and Browser.
+Includes five tabs: Introduction, Classification, Overview, Browser, and Export Data.
 }
 \examples{
 \dontrun{

@@ -2,13 +2,13 @@
 % Please edit documentation in R/ui_helpers.R
 \name{load_app_css}
 \alias{load_app_css}
-\title{Load External CSS}
+\title{Load Application CSS}
 \usage{
 load_app_css()
 }
 \value{
-HTML head tag with CSS link
+HTML head tag with embedded CSS
 }
 \description{
-Loads the external CSS file for the application.
+Embeds CSS styles directly in the application.
 }

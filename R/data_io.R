@@ -559,13 +559,15 @@ get_all_timestamps <- function(.dir) {
     class_ts <- con %>%
       dplyr::tbl("classification_log") %>%
       dplyr::distinct(timestamp) %>%
-      dplyr::collect()
+      dplyr::collect() %>%
+      dplyr::mutate(timestamp = as.character(timestamp))  # Force character type
 
     # Get timestamps from note_log
     note_ts <- con %>%
       dplyr::tbl("note_log") %>%
       dplyr::distinct(timestamp) %>%
-      dplyr::collect()
+      dplyr::collect() %>%
+      dplyr::mutate(timestamp = as.character(timestamp))  # Force character type
 
     # Combine and sort
     all_ts <- dplyr::bind_rows(class_ts, note_ts) %>%

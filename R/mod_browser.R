@@ -17,7 +17,7 @@ mod_browser_ui <- function(id) {
     shiny::fluidRow(
       # ===== LEFT SIDEBAR - FILTERS (3 columns) =====
       shiny::column(
-        2,
+        3,
         shiny::div(
           class = "sidebar",
 
@@ -88,7 +88,7 @@ mod_browser_ui <- function(id) {
 
       # ===== MIDDLE - DOCUMENT LIST (3 columns) =====
       shiny::column(
-        4,
+        3,
         shiny::div(
           class = "document-list-panel",
           shiny::h4("Documents", style = "margin-top: 0;"),
@@ -227,14 +227,7 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
 
     # ===== SCHEMA FILTER UI =====
     output$schema_filter_ui <- shiny::renderUI({
-      sch <- tryCatch({
-        schema_r()
-      }, error = function(e) {
-        message("ERROR in schema_r(): ", e$message)
-        NULL
-      })
-
-      message("schema_filter_ui: sch is ", if(is.null(sch)) "NULL" else paste("list with", length(sch), "schemas"))
+      sch <- schema_r()
 
       # Handle NULL or empty schema
       if (is.null(sch) || length(sch) == 0) {
@@ -250,8 +243,6 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
       for (sid in names(sch)) {
         choices[sch[[sid]]$name] <- sid
       }
-
-      message("schema_filter_ui: Created choices: ", paste(names(choices), collapse=", "))
 
       shiny::selectInput(
         session$ns("schema_select"),

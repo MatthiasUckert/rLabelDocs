@@ -1,7 +1,7 @@
 library(tidyverse)
 devtools::load_all(".")
 
-dir_ <- "../_package_debug/rLabelDocs/TestClassification/"
+dir_ <- "../_package_debug/rLabelDocs/01-Classification/"
 start_classification(project_dir = dir_)
 
 #

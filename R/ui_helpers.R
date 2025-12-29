@@ -3,45 +3,81 @@
 
 #' Generate Classification Dropdown
 #'
-#' Creates a classification dropdown (single or multi-select based on mode).
+#' Creates a classification dropdown. Always uses multi-select internally
+#' to preserve selections when switching modes. Mode only affects placeholder text.
 #'
 #' @param ns Namespace function from module
 #' @param schema_id Schema ID
 #' @param class_name Class name
 #' @param values Available values for this class
 #' @param selected_values Currently selected values
-#' @param mode "single" or "multi"
-#' @return Shiny input element (selectInput or selectizeInput)
+#' @param mode "single" or "multi" (affects hint only, not behavior)
+#' @return Shiny selectizeInput
 #' @keywords internal
 generate_classification_dropdown <- function(ns, schema_id, class_name, values, selected_values, mode = "multi") {
   # Create unique dropdown ID
   dropdown_id <- paste0("dropdown_", schema_id, "_", class_name)
 
-  if (mode == "single") {
-    # Single-select dropdown
-    shiny::selectInput(
-      inputId = ns(dropdown_id),
-      label = NULL,
-      choices = c("-- Select --" = "", values),
-      selected = if (length(selected_values) > 0) selected_values[1] else "",
-      width = "100%"
-    )
+  # Always use multi-select - mode only affects placeholder text
+  placeholder <- if (mode == "single") {
+    "Select one value..."
   } else {
-    # Multi-select dropdown with tags
-    shiny::selectizeInput(
-      inputId = ns(dropdown_id),
-      label = NULL,
-      choices = values,
-      selected = selected_values,
-      multiple = TRUE,
-      width = "100%",
-      options = list(
-        placeholder = "Select one or more...",
-        plugins = list("remove_button")
-      )
-    )
+    "Select one or more..."
   }
+
+  shiny::selectizeInput(
+    inputId = ns(dropdown_id),
+    label = NULL,
+    choices = values,
+    selected = selected_values,  # Keep ALL selections regardless of mode
+    multiple = TRUE,
+    width = "100%",
+    options = list(
+      placeholder = placeholder,
+      plugins = list("remove_button")
+    )
+  )
 }
+
+#' Generate Multi-Selection Warning
+#'
+#' Creates warning badge when in single mode but multiple values selected.
+#'
+#' @param selections_nested Nested list of current selections
+#' @param schema Schema list
+#' @param mode Current selection mode
+#' @return Shiny UI element or NULL
+#' @export
+generate_multiselect_warning <- function(selections_nested, schema, mode) {
+  if (mode != "single") return(NULL)
+
+  # Find classes with >1 selection
+  warnings <- list()
+
+  for (schema_id in names(selections_nested)) {
+    schema_classes <- selections_nested[[schema_id]]
+    if (is.null(schema_classes)) next
+
+    for (class_name in names(schema_classes)) {
+      values <- schema_classes[[class_name]]
+      if (length(values) > 1) {
+        schema_name <- schema[[schema_id]]$name
+        warnings[[length(warnings) + 1]] <- paste0(schema_name, " -> ", class_name)
+      }
+    }
+  }
+
+  if (length(warnings) == 0) return(NULL)
+
+  shiny::div(
+    class = "alert alert-warning",
+    style = "padding: 8px 12px; margin-bottom: 10px; font-size: 13px;",
+    shiny::icon("exclamation-triangle"),
+    " Single mode active, but multiple values selected in: ",
+    shiny::strong(paste(warnings, collapse = ", "))
+  )
+}
+
 
 #' Generate Schema Tab Content
 #'
@@ -235,11 +271,13 @@ get_schema_tab_id <- function(schema_id) {
 #' @keywords internal
 format_selection_mode <- function(mode) {
   if (mode == "single") {
-    "Single-select mode: Choose one value per class"
+    "Single mode: Recommended one value per class (multiple still allowed)"
   } else {
-    "Multi-select mode: Choose multiple values per class"
+    "Multi mode: Select multiple values per class"
   }
 }
+
+
 
 #' Load Application CSS
 #'

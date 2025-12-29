@@ -432,6 +432,9 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       current_selections <- shiny::reactiveValuesToList(selections)
       mode <- input$selection_mode
 
+      # Generate warning if in single mode with multiple selections
+      warning_ui <- generate_multiselect_warning(current_selections, sch, mode)
+
       # Calculate completion for each schema
       completion <- calculate_schema_completion(current_selections, sch)
 
@@ -453,7 +456,7 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
           schema_id,
           sch[[schema_id]],
           current_selections[[schema_id]] %||% list(),
-          mode # Pass the mode parameter
+          mode
         )
 
         shiny::tabPanel(
@@ -466,13 +469,17 @@ mod_classification_server <- function(id, .dir, .user_id, schema, marked_docs = 
       # Preserve currently active tab when re-rendering
       current_tab <- input$schema_tabs %||% get_schema_tab_id(completion$schema_id[1])
 
-      do.call(shiny::tabsetPanel, c(
-        list(
-          id = session$ns("schema_tabs"),
-          selected = current_tab # Preserve active tab
-        ),
-        tab_panels
-      ))
+      # Return warning + tabs
+      shiny::tagList(
+        warning_ui,
+        do.call(shiny::tabsetPanel, c(
+          list(
+            id = session$ns("schema_tabs"),
+            selected = current_tab
+          ),
+          tab_panels
+        ))
+      )
     })
 
     # ===== HANDLE DROPDOWN CHANGES

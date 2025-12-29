@@ -24,12 +24,13 @@ generate_classification_dropdown(
 
 \item{selected_values}{Currently selected values}
 
-\item{mode}{"single" or "multi"}
+\item{mode}{"single" or "multi" (affects hint only, not behavior)}
 }
 \value{
-Shiny input element (selectInput or selectizeInput)
+Shiny selectizeInput
 }
 \description{
-Creates a classification dropdown (single or multi-select based on mode).
+Creates a classification dropdown. Always uses multi-select internally
+to preserve selections when switching modes. Mode only affects placeholder text.
 }
 \keyword{internal}

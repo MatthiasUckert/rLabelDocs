@@ -1,6 +1,6 @@
 Package: rLabelDocs
 Title: Interactive Document Classification and Labeling System
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: 
     person("Matthias", "Uckert", , "Matthias.Uckert@Outlook.com", role = c("aut", "cre"),
            comment = c(ORCID = "YOUR-ORCID-ID"))

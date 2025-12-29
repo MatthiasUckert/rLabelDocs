@@ -564,6 +564,91 @@ load_app_css <- function() {
 }
 
 /* ==========================================
+   BROWSER TAB - DT TABLE STYLES
+   ========================================== */
+
+/* DT container */
+.dataTables_wrapper {
+  font-size: 13px;
+}
+
+/* DT search box */
+.dataTables_filter {
+  margin-bottom: 10px;
+}
+
+.dataTables_filter input {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: 5px 10px;
+  margin-left: 5px;
+}
+
+/* DT table */
+table.dataTable {
+  border-collapse: collapse !important;
+}
+
+table.dataTable tbody tr {
+  cursor: pointer;
+}
+
+table.dataTable tbody tr:hover {
+  background-color: #e3f2fd !important;
+}
+
+table.dataTable tbody tr.selected {
+  background-color: #2196f3 !important;
+  color: white !important;
+}
+
+table.dataTable tbody tr.selected td {
+  color: white !important;
+}
+
+/* Checkbox in DT */
+.mark-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+/* DT pagination */
+.dataTables_paginate {
+  margin-top: 10px;
+}
+
+.dataTables_paginate .paginate_button {
+  padding: 5px 10px;
+  margin: 0 2px;
+  border-radius: 3px;
+}
+
+.dataTables_paginate .paginate_button.current {
+  background: #3498db !important;
+  color: white !important;
+  border: none !important;
+}
+
+/* DT info text */
+.dataTables_info {
+  font-size: 12px;
+  color: #666;
+  padding-top: 10px;
+}
+
+/* DT length menu */
+.dataTables_length {
+  margin-bottom: 10px;
+}
+
+.dataTables_length select {
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  padding: 3px 8px;
+}
+
+/* ==========================================
    OVERVIEW TAB STYLES
    ========================================== */
 

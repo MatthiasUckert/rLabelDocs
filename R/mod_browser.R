@@ -1,5 +1,5 @@
 # BROWSER MODULE
-# Advanced filtering and document browsing
+# Advanced filtering and document browsing with DT virtualization
 
 #' Browser Module UI
 #'
@@ -17,7 +17,7 @@ mod_browser_ui <- function(id) {
     shiny::fluidRow(
       # ===== LEFT SIDEBAR - FILTERS (3 columns) =====
       shiny::column(
-        3,
+        2,
         shiny::div(
           class = "sidebar",
 
@@ -88,7 +88,7 @@ mod_browser_ui <- function(id) {
 
       # ===== MIDDLE - DOCUMENT LIST (3 columns) =====
       shiny::column(
-        3,
+        4,
         shiny::div(
           class = "document-list-panel",
           shiny::h4("Documents", style = "margin-top: 0;"),
@@ -128,18 +128,10 @@ mod_browser_ui <- function(id) {
             )
           ),
 
-          # Search box
-          shiny::textInput(
-            ns("doc_search"),
-            label = NULL,
-            placeholder = "Search documents...",
-            width = "100%"
-          ),
-
-          # Document list with checkboxes
+          # Document list with DT (virtualized)
           shiny::div(
-            class = "doc-list-container",
-            shiny::uiOutput(ns("document_list_ui"))
+            style = "margin-top: 10px;",
+            DT::dataTableOutput(ns("document_list_dt"), height = "600px")
           )
         )
       ),
@@ -162,7 +154,7 @@ mod_browser_ui <- function(id) {
           # Document content
           shiny::div(
             class = "document-viewer",
-            shiny::htmlOutput(ns("document_content"))
+            shiny::uiOutput(ns("document_content"))
           ),
 
           # Classifications for this document
@@ -235,12 +227,31 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
 
     # ===== SCHEMA FILTER UI =====
     output$schema_filter_ui <- shiny::renderUI({
-      sch <- schema_r()
+      sch <- tryCatch({
+        schema_r()
+      }, error = function(e) {
+        message("ERROR in schema_r(): ", e$message)
+        NULL
+      })
+
+      message("schema_filter_ui: sch is ", if(is.null(sch)) "NULL" else paste("list with", length(sch), "schemas"))
+
+      # Handle NULL or empty schema
+      if (is.null(sch) || length(sch) == 0) {
+        return(shiny::selectInput(
+          session$ns("schema_select"),
+          label = NULL,
+          choices = c("-- Loading... --" = ""),
+          selected = ""
+        ))
+      }
 
       choices <- c("-- All Schemas --" = "")
       for (sid in names(sch)) {
         choices[sch[[sid]]$name] <- sid
       }
+
+      message("schema_filter_ui: Created choices: ", paste(names(choices), collapse=", "))
 
       shiny::selectInput(
         session$ns("schema_select"),
@@ -255,7 +266,8 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
       sch <- schema_r()
       selected_schema <- input$schema_select
 
-      if (is.null(selected_schema) || selected_schema == "") {
+      # Always show something
+      if (is.null(sch) || is.null(selected_schema) || selected_schema == "") {
         return(shiny::div(
           style = "color: #999; font-style: italic;",
           "Select a schema first"
@@ -279,7 +291,8 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
       selected_schema <- input$schema_select
       selected_class <- input$class_select
 
-      if (is.null(selected_schema) || selected_schema == "" ||
+      # Always show something
+      if (is.null(sch) || is.null(selected_schema) || selected_schema == "" ||
           is.null(selected_class) || selected_class == "") {
         return(shiny::div(
           style = "color: #999; font-style: italic;",
@@ -408,7 +421,7 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
       if (!has_filters) {
         filter_text <- paste0(filter_text, "Filter: All classified documents\n")
       } else {
-        if (!is.null(input$schema_select) && input$schema_select != "") {
+        if (!is.null(input$schema_select) && input$schema_select != "" && !is.null(sch)) {
           schema_name <- sch[[input$schema_select]]$name
           filter_text <- paste0(filter_text, "Schema: ", schema_name, "\n")
         }
@@ -434,25 +447,10 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
 
     # ===== MARKING FUNCTIONALITY =====
 
-    # Handle individual checkbox clicks
-    shiny::observeEvent(input$doc_checkbox, {
-      if (!is.null(marked_docs)) {
-        checkbox_info <- input$doc_checkbox
-        doc_id <- checkbox_info$id
-        is_checked <- checkbox_info$checked
-
-        if (is_checked) {
-          marked_docs$ids <- unique(c(marked_docs$ids, doc_id))
-        } else {
-          marked_docs$ids <- setdiff(marked_docs$ids, doc_id)
-        }
-      }
-    })
-
-    # Mark all visible documents
+    # Mark all visible documents (all in current filtered list)
     shiny::observeEvent(input$mark_all_visible, {
       if (!is.null(marked_docs)) {
-        docs <- get_displayed_docs()
+        docs <- values$filtered_docs
         if (length(docs) > 0) {
           marked_docs$ids <- unique(c(marked_docs$ids, docs))
           shiny::showNotification(
@@ -467,7 +465,7 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
     # Unmark all visible documents
     shiny::observeEvent(input$unmark_all_visible, {
       if (!is.null(marked_docs)) {
-        docs <- get_displayed_docs()
+        docs <- values$filtered_docs
         if (length(docs) > 0) {
           marked_docs$ids <- setdiff(marked_docs$ids, docs)
           shiny::showNotification(
@@ -492,6 +490,130 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
       }
     })
 
+    # ===== DOCUMENT LIST - DT WITH VIRTUALIZATION =====
+    output$document_list_dt <- DT::renderDataTable({
+      docs <- values$filtered_docs
+
+      if (is.null(docs) || length(docs) == 0) {
+        # Empty dataframe with same structure
+        df <- data.frame(
+          Marked = logical(0),
+          DocID = character(0),
+          stringsAsFactors = FALSE
+        )
+        return(DT::datatable(
+          df,
+          options = list(
+            language = list(emptyTable = "No documents found")
+          ),
+          rownames = FALSE
+        ))
+      }
+
+      # Get marked status
+      marked_ids <- if (!is.null(marked_docs)) marked_docs$ids else character(0)
+
+      # Build dataframe
+      df <- data.frame(
+        Marked = docs %in% marked_ids,
+        DocID = docs,
+        stringsAsFactors = FALSE
+      )
+
+      # Build the callback JS with proper namespacing
+      callback_js <- sprintf("
+      // Handle checkbox clicks for marking
+      table.on('click', '.mark-checkbox', function(e) {
+        e.stopPropagation();  // Don't trigger row selection
+        var row = table.row($(this).closest('tr'));
+        var data = row.data();
+        var docId = data[1];
+        var isChecked = $(this).is(':checked');
+
+        // Send to Shiny
+        Shiny.setInputValue('%s', {
+          doc_id: docId,
+          marked: isChecked
+        }, {priority: 'event'});
+      });
+    ", session$ns("mark_toggle"))
+
+      DT::datatable(
+        df,
+        selection = list(mode = "single", selected = 1),
+        rownames = FALSE,
+        colnames = c("Mark", "Document ID"),
+        extensions = "Scroller",  # Required for virtual scrolling
+        options = list(
+          pageLength = 50,
+          lengthMenu = c(25, 50, 100, 200),
+          scrollY = "500px",
+          scrollCollapse = TRUE,
+          scroller = TRUE,  # Enable virtual scrolling
+          deferRender = TRUE,  # Defer rendering for performance
+          search = list(regex = FALSE, caseInsensitive = TRUE),
+          columnDefs = list(
+            # Marked column - render as checkbox
+            list(
+              targets = 0,
+              width = "40px",
+              className = "dt-center",
+              render = DT::JS("
+              function(data, type, row, meta) {
+                if (type === 'display') {
+                  var checked = data ? 'checked' : '';
+                  return '<input type=\"checkbox\" class=\"mark-checkbox\" ' + checked + ' />';
+                }
+                return data;
+              }
+            ")
+            ),
+            # DocID column
+            list(
+              targets = 1,
+              className = "dt-left"
+            )
+          ),
+          # Highlight selected row
+          drawCallback = DT::JS("
+          function(settings) {
+            // Style selected row
+            $(this.api().table().body()).find('tr.selected').css('background-color', '#2196f3');
+            $(this.api().table().body()).find('tr.selected').css('color', 'white');
+          }
+        ")
+        ),
+        class = "cell-border stripe hover",
+        callback = DT::JS(callback_js)
+      )
+    }, server = FALSE)  # Client-side for Scroller extension compatibility
+
+    # Handle marking toggle from checkbox click
+    shiny::observeEvent(input$mark_toggle, {
+      if (!is.null(marked_docs) && !is.null(input$mark_toggle)) {
+        doc_id <- input$mark_toggle$doc_id
+        is_marked <- input$mark_toggle$marked
+
+        if (is_marked) {
+          marked_docs$ids <- unique(c(marked_docs$ids, doc_id))
+        } else {
+          marked_docs$ids <- setdiff(marked_docs$ids, doc_id)
+        }
+      }
+    })
+
+    # Handle row selection - update selected document
+    shiny::observeEvent(input$document_list_dt_rows_selected, {
+      selected_row <- input$document_list_dt_rows_selected
+
+      if (!is.null(selected_row) && length(selected_row) > 0) {
+        docs <- values$filtered_docs
+        if (selected_row <= length(docs)) {
+          values$selected_doc_id <- docs[selected_row]
+        }
+      }
+    })
+
     # ===== DOCUMENT NOTES DISPLAY =====
     output$document_notes_display <- shiny::renderUI({
       if (is.null(values$selected_doc_id)) {
@@ -500,86 +622,6 @@ mod_browser_server <- function(id, .dir, schema, marked_docs = NULL) {
 
       note_df <- read_note(dir_r(), values$selected_doc_id)
       render_note_display(note_df, "No notes for this document")
-    })
-
-    # ===== DOCUMENT LIST UI WITH CHECKBOXES =====
-    get_displayed_docs <- shiny::reactive({
-      if (is.null(values$filtered_docs)) {
-        return(character(0))
-      }
-
-      docs <- values$filtered_docs
-
-      # Apply search filter
-      if (!is.null(input$doc_search) && input$doc_search != "") {
-        search_term <- tolower(trimws(input$doc_search))
-        docs <- docs[grepl(search_term, tolower(docs))]
-      }
-
-      docs
-    })
-
-    output$document_list_ui <- shiny::renderUI({
-      docs <- get_displayed_docs()
-
-      if (length(docs) == 0) {
-        return(shiny::div(
-          style = "text-align: center; color: #999; padding: 20px;",
-          if (!is.null(input$doc_search) && input$doc_search != "") {
-            "No documents match your search"
-          } else {
-            "No documents found"
-          }
-        ))
-      }
-
-      # Get marked status
-      marked_ids <- if (!is.null(marked_docs)) marked_docs$ids else character(0)
-
-      # Create document items with checkboxes
-      doc_items <- lapply(docs, function(doc_id) {
-        is_selected <- identical(values$selected_doc_id, doc_id)
-        is_marked <- doc_id %in% marked_ids
-
-        shiny::div(
-          class = if (is_selected) "doc-item doc-item-selected" else "doc-item",
-          style = "display: flex; align-items: center; gap: 10px;",
-
-          # Checkbox
-          if (!is.null(marked_docs)) {
-            shiny::tags$input(
-              type = "checkbox",
-              checked = if (is_marked) NA else NULL,
-              onclick = sprintf(
-                "Shiny.setInputValue('%s', {id: '%s', checked: this.checked}, {priority: 'event'})",
-                session$ns("doc_checkbox"),
-                doc_id
-              ),
-              style = "cursor: pointer; width: 16px; height: 16px; flex-shrink: 0;"
-            )
-          } else {
-            NULL
-          },
-
-          # Document ID (clickable)
-          shiny::div(
-            onclick = sprintf(
-              "Shiny.setInputValue('%s', '%s', {priority: 'event'})",
-              session$ns("doc_clicked"),
-              doc_id
-            ),
-            style = "flex: 1; cursor: pointer;",
-            doc_id
-          )
-        )
-      })
-
-      shiny::div(doc_items)
-    })
-
-    # Handle document selection
-    shiny::observeEvent(input$doc_clicked, {
-      values$selected_doc_id <- input$doc_clicked
     })
 
     # ===== DOCUMENT VIEWER =====

@@ -18,6 +18,5 @@ List with:
 }
 }
 \description{
-Checks if project has required files (Documents.parquet and Schema.csv).
-Used by Introduction module to determine if setup is needed.
+Checks if project has required files (Documents.db and Schema.csv).
 }

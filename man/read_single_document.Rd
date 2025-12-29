@@ -15,5 +15,5 @@ read_single_document(.dir, .doc_id)
 Data frame with DocID and HTML columns
 }
 \description{
-Retrieves a single document by DocID using Arrow lazy loading.
+Retrieves a single document by DocID from SQLite.
 }

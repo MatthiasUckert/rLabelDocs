@@ -31,13 +31,13 @@ validate_project_directory <- function(.dir) {
   }
 
   # Check for Documents.parquet
-  file_docs <- file.path(.dir, "Documents.parquet")
-  if (!file.exists(file_docs)) {
-    stop("Documents.parquet not found in: ", .dir, call. = FALSE)
-  }
+  # file_docs <- file.path(.dir, "Documents.parquet")
+  # if (!file.exists(file_docs)) {
+  #   stop("Documents.parquet not found in: ", .dir, call. = FALSE)
+  # }
 
   # Validate Documents.parquet structure
-  validate_documents_file(file_docs)
+  validate_documents_file(.dir)
 
   # Validate schema file
   validate_schema_file(.dir)
@@ -57,48 +57,59 @@ validate_project_directory <- function(.dir) {
   return(TRUE)
 }
 
-#' Validate Documents File
+#' Validate Documents Database
 #'
-#' Checks Documents.parquet for required structure and data integrity.
+#' Checks Documents.db for required structure and data integrity.
 #'
-#' @param file_path Path to Documents.parquet file
+#' @param .dir Path to project directory
 #' @return TRUE if valid, stops with error if invalid
 #' @keywords internal
-validate_documents_file <- function(file_path) {
-  # Open dataset and check columns
+validate_documents_file <- function(.dir) {
+  db_path <- file.path(.dir, "Documents.db")
+
+  if (!file.exists(db_path)) {
+    stop("Documents.db not found in: ", .dir,
+         "\nRun convert_documents_to_sqlite() to create it from Documents.parquet",
+         call. = FALSE)
+  }
+
   tryCatch({
-    ds <- arrow::open_dataset(file_path)
+    con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
+    on.exit(DBI::dbDisconnect(con))
 
-    # Check required columns
-    required_cols <- c("DocID", "HTML")
-    if (!all(required_cols %in% names(ds))) {
-      missing <- setdiff(required_cols, names(ds))
-      stop(
-        "Documents.parquet missing required columns: ",
-        paste(missing, collapse = ", "),
-        call. = FALSE
-      )
+    # Check table exists
+    if (!DBI::dbExistsTable(con, "documents")) {
+      stop("Documents.db does not contain 'documents' table", call. = FALSE)
     }
 
-    # Check for duplicate DocIDs
-    doc_ids <- ds %>%
-      dplyr::select(DocID) %>%
+    # Check columns
+    cols <- DBI::dbListFields(con, "documents")
+    required_cols <- c("doc_id", "html")
+
+    if (!all(required_cols %in% cols)) {
+      missing <- setdiff(required_cols, cols)
+      stop("documents table missing required columns: ",
+           paste(missing, collapse = ", "), call. = FALSE)
+    }
+
+    # Check for duplicate doc_ids
+    dup_count <- con %>%
+      dplyr::tbl("documents") %>%
+      dplyr::group_by(doc_id) %>%
+      dplyr::filter(dplyr::n() > 1) %>%
+      dplyr::ungroup() %>%
+      dplyr::count() %>%
       dplyr::collect() %>%
-      dplyr::pull(DocID)
+      dplyr::pull(n)
 
-    if (any(duplicated(doc_ids))) {
-      stop("Duplicate DocIDs found in Documents.parquet", call. = FALSE)
-    }
-
-    # Check for empty/NA DocIDs
-    if (any(is.na(doc_ids) | doc_ids == "")) {
-      stop("DocIDs cannot be empty or NA", call. = FALSE)
+    if (dup_count > 0) {
+      stop("Duplicate doc_ids found in documents table", call. = FALSE)
     }
 
     return(TRUE)
 
   }, error = function(e) {
-    stop("Error reading Documents.parquet: ", e$message, call. = FALSE)
+    stop("Error validating Documents.db: ", e$message, call. = FALSE)
   })
 }
 
@@ -317,8 +328,7 @@ update_schema_hash <- function(.dir) {
 
 #' Check Project Setup
 #'
-#' Checks if project has required files (Documents.parquet and Schema.csv).
-#' Used by Introduction module to determine if setup is needed.
+#' Checks if project has required files (Documents.db and Schema.csv).
 #'
 #' @param .dir Path to project directory
 #' @return List with:
@@ -327,8 +337,21 @@ update_schema_hash <- function(.dir) {
 #'   - is_ready: logical (both files exist)
 #' @export
 check_project_setup <- function(.dir) {
-  has_documents <- file.exists(file.path(.dir, "Documents.parquet"))
   has_schema <- file.exists(file.path(.dir, "Schema.csv"))
+
+  # Check for Documents.db with documents table
+  db_path <- file.path(.dir, "Documents.db")
+  has_documents <- FALSE
+
+  if (file.exists(db_path)) {
+    tryCatch({
+      con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
+      has_documents <- DBI::dbExistsTable(con, "documents")
+      DBI::dbDisconnect(con)
+    }, error = function(e) {
+      has_documents <- FALSE
+    })
+  }
 
   list(
     has_documents = has_documents,

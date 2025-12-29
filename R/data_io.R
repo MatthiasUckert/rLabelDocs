@@ -79,6 +79,36 @@ get_db_connection <- function(.dir) {
   DBI::dbConnect(RSQLite::SQLite(), db_file)
 }
 
+#' Get Documents Database Connection
+#'
+#' Helper function to get SQLite connection for documents.
+#'
+#' @param .dir Path to project directory
+#' @return DBI connection object
+#' @keywords internal
+get_documents_db_connection <- function(.dir) {
+  db_file <- file.path(.dir, "Documents.db")
+  if (!file.exists(db_file)) {
+    stop("Documents.db not found. Run convert_documents_to_sqlite() first.", call. = FALSE)
+  }
+  DBI::dbConnect(RSQLite::SQLite(), db_file)
+}
+
+#' Execute Function with Documents Database Connection
+#'
+#' Wrapper that handles documents database connection lifecycle.
+#'
+#' @param .dir Path to project directory
+#' @param .func Function to execute with connection
+#' @return Result of .func
+#' @keywords internal
+with_documents_db_connection <- function(.dir, .func) {
+  con <- get_documents_db_connection(.dir)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+  .func(con)
+}
+
+
 # ===== SCHEMA FUNCTIONS =====
 
 #' Read Schema File
@@ -136,40 +166,57 @@ read_schema <- function(.dir) {
 
 #' Read Single Document
 #'
-#' Retrieves a single document by DocID using Arrow lazy loading.
+#' Retrieves a single document by DocID from SQLite.
 #'
 #' @param .dir Path to project directory
 #' @param .doc_id Document ID to retrieve
 #' @return Data frame with DocID and HTML columns
 #' @export
 read_single_document <- function(.dir, .doc_id) {
-  file_docs <- file.path(.dir, "Documents.parquet")
+  with_documents_db_connection(.dir, function(con) {
+    result <- con %>%
+      dplyr::tbl("documents") %>%
+      dplyr::filter(doc_id == .doc_id) %>%
+      dplyr::collect()
 
-  if (!file.exists(file_docs)) {
-    stop("Documents.parquet not found in: ", .dir, call. = FALSE)
-  }
+    if (nrow(result) == 0) {
+      return(data.frame(
+        DocID = character(),
+        HTML = character(),
+        stringsAsFactors = FALSE
+      ))
+    }
 
-  arrow::open_dataset(file_docs) %>%
-    dplyr::filter(DocID == .doc_id) %>%
-    dplyr::collect()
+    data.frame(
+      DocID = result$doc_id,
+      HTML = result$html,
+      stringsAsFactors = FALSE
+    )
+  })
 }
+
 
 #' Get Document Count
 #'
-#' Returns total number of documents without loading all data.
+#' Returns total number of documents.
 #'
 #' @param .dir Path to project directory
 #' @return Integer count of documents
 #' @export
 get_document_count <- function(.dir) {
-  file_docs <- file.path(.dir, "Documents.parquet")
+  db_file <- file.path(.dir, "Documents.db")
 
-  if (!file.exists(file_docs)) {
-    return(0)
+  if (!file.exists(db_file)) {
+    return(0L)
   }
 
-  arrow::open_dataset(file_docs) %>%
-    nrow()
+  with_documents_db_connection(.dir, function(con) {
+    con %>%
+      dplyr::tbl("documents") %>%
+      dplyr::count() %>%
+      dplyr::collect() %>%
+      dplyr::pull(n)
+  })
 }
 
 # ===== CLASSIFICATION FUNCTIONS =====
@@ -327,22 +374,20 @@ save_classification <- function(.dir, .doc_id, .user_id, .classifications_list) 
 get_docids <- function(.dir, .type = c("All", "Classified", "Unclassified")) {
   .type <- match.arg(.type)
 
-  file_docs <- file.path(.dir, "Documents.parquet")
-  if (!file.exists(file_docs)) {
-    stop("Documents.parquet not found in: ", .dir, call. = FALSE)
-  }
-
-  # Get all document IDs
-  all_ids <- arrow::open_dataset(file_docs) %>%
-    dplyr::select(DocID) %>%
-    dplyr::collect() %>%
-    dplyr::pull(DocID)
+  # Get all document IDs from Documents.db
+  all_ids <- with_documents_db_connection(.dir, function(con) {
+    con %>%
+      dplyr::tbl("documents") %>%
+      dplyr::select(doc_id) %>%
+      dplyr::collect() %>%
+      dplyr::pull(doc_id)
+  })
 
   if (.type == "All") {
     return(all_ids)
   }
 
-  # Get classified document IDs from SQLite using dplyr
+  # Get classified document IDs from classification_data.db
   classified_ids <- with_db_connection(.dir, function(con) {
     con %>%
       dplyr::tbl("classification_log") %>%
@@ -947,3 +992,145 @@ delete_export <- function(.dir, .filename) {
   file.remove(filepath)
   return(TRUE)
 }
+
+
+#' Convert Documents Parquet to SQLite
+#'
+#' Converts a Documents.parquet file to a SQLite database with proper
+#' indexing for fast lookups. Run this once before using the classification app.
+#'
+#' @param parquet_path Path to Documents.parquet file
+#' @return Invisible path to created SQLite database
+#'
+#' @details
+#' The function:
+#' - Reads all documents from the Parquet file
+#' - Creates a SQLite database in the same folder
+#' - Creates a 'documents' table with doc_id (indexed) and html columns
+#' - Optimizes the database for fast lookups
+#'
+#' Expected Parquet structure:
+#' - Column 'DocID': Unique document identifier (text)
+#' - Column 'HTML': Document content (text)
+#'
+#' @examples
+#' \dontrun{
+#' # Convert documents
+#' convert_documents_to_sqlite("path/to/Documents.parquet")
+#'
+#' # The SQLite database will be created at:
+#' # path/to/classification_data.db
+#' }
+#'
+#' @export
+convert_documents_to_sqlite <- function(parquet_path) {
+
+
+  if (!file.exists(parquet_path)) {
+    stop("File not found: ", parquet_path, call. = FALSE)
+  }
+
+  if (!grepl("\\.parquet$", parquet_path, ignore.case = TRUE)) {
+    stop("Expected a .parquet file, got: ", basename(parquet_path), call. = FALSE)
+  }
+
+
+  parquet_dir <- dirname(parquet_path)
+  db_path <- file.path(parquet_dir, "Documents.db")
+
+  message("Converting Documents to SQLite")
+  message("=" |> rep(60) |> paste(collapse = ""))
+  message("Input:  ", parquet_path)
+  message("Output: ", db_path)
+  message("")
+
+
+  message("Reading Parquet file...")
+  docs <- arrow::read_parquet(parquet_path)
+
+  # Validate columns
+  if (!"DocID" %in% names(docs)) {
+    stop("Parquet file must have a 'DocID' column", call. = FALSE)
+  }
+  if (!"HTML" %in% names(docs)) {
+    stop("Parquet file must have an 'HTML' column", call. = FALSE)
+  }
+
+  n_docs <- nrow(docs)
+  html_size_mb <- sum(nchar(docs$HTML), na.rm = TRUE) / 1024 / 1024
+
+  message("  Documents: ", format(n_docs, big.mark = ","))
+  message("  HTML size: ", round(html_size_mb, 1), " MB")
+  message("")
+
+
+  message("Creating SQLite database...")
+
+  con <- DBI::dbConnect(RSQLite::SQLite(), db_path)
+  on.exit(DBI::dbDisconnect(con), add = TRUE)
+
+  # Drop existing documents table if exists
+  if (DBI::dbExistsTable(con, "documents")) {
+    message("  Dropping existing documents table...")
+    DBI::dbRemoveTable(con, "documents")
+  }
+
+
+  DBI::dbExecute(con, "
+    CREATE TABLE documents (
+      doc_id TEXT PRIMARY KEY,
+      html TEXT NOT NULL
+    )
+  ")
+
+
+  message("Inserting documents...")
+
+  docs_df <- data.frame(
+    doc_id = docs$DocID,
+    html = docs$HTML,
+    stringsAsFactors = FALSE
+  )
+
+  # Insert in chunks for large datasets (progress feedback)
+  chunk_size <- 1000
+  n_chunks <- ceiling(n_docs / chunk_size)
+
+  for (i in seq_len(n_chunks)) {
+    start_idx <- (i - 1) * chunk_size + 1
+    end_idx <- min(i * chunk_size, n_docs)
+
+    chunk <- docs_df[start_idx:end_idx, ]
+    DBI::dbAppendTable(con, "documents", chunk)
+
+    if (n_chunks > 1 && i %% 5 == 0) {
+      message("  Progress: ", end_idx, "/", n_docs, " documents")
+    }
+  }
+
+
+  message("Creating index and optimizing...")
+  DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS idx_documents_doc_id ON documents(doc_id)")
+  DBI::dbExecute(con, "ANALYZE")
+
+
+  db_size_mb <- file.size(db_path) / 1024 / 1024
+  parquet_size_mb <- file.size(parquet_path) / 1024 / 1024
+
+  message("")
+  message("=" |> rep(60) |> paste(collapse = ""))
+  message("Conversion complete!")
+  message("=" |> rep(60) |> paste(collapse = ""))
+  message("")
+  message("  Documents converted: ", format(n_docs, big.mark = ","))
+  message("  Parquet file size:   ", round(parquet_size_mb, 1), " MB")
+  message("  SQLite file size:    ", round(db_size_mb, 1), " MB")
+  message("")
+  message("  Database location: ", db_path)
+  message("")
+  message("You can now delete '", basename(parquet_path), "' if desired.")
+  message("")
+
+  invisible(db_path)
+}
+

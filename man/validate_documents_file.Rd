@@ -2,17 +2,17 @@
 % Please edit documentation in R/validation.R
 \name{validate_documents_file}
 \alias{validate_documents_file}
-\title{Validate Documents File}
+\title{Validate Documents Database}
 \usage{
-validate_documents_file(file_path)
+validate_documents_file(.dir)
 }
 \arguments{
-\item{file_path}{Path to Documents.parquet file}
+\item{.dir}{Path to project directory}
 }
 \value{
 TRUE if valid, stops with error if invalid
 }
 \description{
-Checks Documents.parquet for required structure and data integrity.
+Checks Documents.db for required structure and data integrity.
 }
 \keyword{internal}

@@ -13,5 +13,5 @@ get_document_count(.dir)
 Integer count of documents
 }
 \description{
-Returns total number of documents without loading all data.
+Returns total number of documents.
 }

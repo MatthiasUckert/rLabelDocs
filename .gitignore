@@ -4,3 +4,5 @@
 .Ruserdata
 ^scripts
 .DS_Store
+_old/
+scripts/

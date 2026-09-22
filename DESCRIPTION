@@ -2,8 +2,7 @@ Package: rLabelDocs
 Title: Interactive Document Classification and Labeling System
 Version: 0.1.1
 Authors@R: 
-    person("Matthias", "Uckert", , "Matthias.Uckert@Outlook.com", role = c("aut", "cre"),
-           comment = c(ORCID = "YOUR-ORCID-ID"))
+    person("Matthias", "Uckert", , "Matthias.Uckert@Outlook.com", role = c("aut", "cre"))
 Description: A comprehensive Shiny-based application for document classification and 
     labeling workflows. Provides an interactive interface for classifying documents 
     according to predefined schemas, tracking classification progress, and managing 
@@ -13,8 +12,8 @@ Description: A comprehensive Shiny-based application for document classification
     scenario requiring systematic document categorization with quality control and 
     progress monitoring.
 License: MIT + file LICENSE
-URL: https://github.com/yourusername/rLabelDocs
-BugReports: https://github.com/yourusername/rLabelDocs/issues
+URL: https://github.com/MatthiasUckert/rLabelDocs
+BugReports: https://github.com/MatthiasUckert/rLabelDocs/issues
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)

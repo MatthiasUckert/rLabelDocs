@@ -1,10 +1,10 @@
-# Document Classification System
+# rLabelDocs
 
 A powerful, flexible **R Shiny application** for multi-schema document classification with team collaboration, complete audit trails, and advanced analytics.
 
 ## 📋 Overview
 
-The Document Classification System enables teams to classify documents using multiple independent schemas simultaneously. Built with modern R packages (Shiny, Arrow, SQLite), it provides a production-ready solution for document tagging workflows with full history tracking and flexible validation.
+rLabelDocs enables teams to classify documents using multiple independent schemas simultaneously. Built with modern R packages (Shiny, Arrow, SQLite), it provides a production-ready solution for document tagging workflows with full history tracking and flexible validation.
 
 ### Key Features
 
@@ -40,29 +40,13 @@ The Document Classification System enables teams to classify documents using mul
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/document-classification-system.git
-   cd document-classification-system
-   ```
+```r
+# install.packages("pak")
+pak::pak("MatthiasUckert/rLabelDocs")
+library(rLabelDocs)
+```
 
-2. **Load the application**
-   ```r
-   # Source all R files
-   source("R/utils.R")
-   source("R/validation.R")
-   source("R/data_io.R")
-   source("R/classification_logic.R")
-   source("R/ui_helpers.R")
-   source("R/mod_intro.R")
-   source("R/mod_classification.R")
-   source("R/mod_overview.R")
-   source("R/mod_browser.R")
-   source("R/mod_export.R")
-   source("R/app.R")
-   ```
-
-3. **Launch the app**
+**Launch the app**
    ```r
    classification_app(
      .dir = "path/to/your/project",
@@ -279,7 +263,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🐛 Bug Reports & Feature Requests
 
-Please use the [GitHub Issues](https://github.com/yourusername/document-classification-system/issues) page to report bugs or request features.
+Please use the [GitHub Issues](https://github.com/MatthiasUckert/rLabelDocs/issues) page to report bugs or request features.
 
 When reporting bugs, please include:
 - R version and platform
@@ -344,5 +328,5 @@ Built with:
 
 ---
 
-**Maintainer**: [Your Name](https://github.com/yourusername)  
-**Project Link**: [https://github.com/yourusername/document-classification-system](https://github.com/yourusername/document-classification-system)
+**Maintainer**: [Matthias Uckert](https://github.com/MatthiasUckert)  
+**Project Link**: [https://github.com/MatthiasUckert/rLabelDocs](https://github.com/MatthiasUckert/rLabelDocs)
